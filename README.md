@@ -6,6 +6,10 @@
 
 **在线体验:** [https://arboris.aozhiai.com](https://arboris.aozhiai.com)
 
+**交流群:** 
+
+<img width="306" height="304" alt="屏幕截图 2025-10-12 221806" src="https://github.com/user-attachments/assets/e0315a7b-1138-4af3-9c5b-0e519c1705e5" />
+
 ---
 <img width="555" height="666" alt="image" src="https://github.com/user-attachments/assets/05974659-3172-4188-95d1-16bdf269d0c6" />
 <img width="811" height="515" alt="image" src="https://github.com/user-attachments/assets/aebe5ddb-3efb-4acd-a160-46df2bf928aa" />
