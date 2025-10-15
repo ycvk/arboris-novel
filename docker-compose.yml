@@ -9,6 +9,8 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
       DEBUG: ${DEBUG:-false}
 
+      DB_PROVIDER: ${DB_PROVIDER:-sqlite}
+
       MYSQL_HOST: ${MYSQL_HOST:-db}
       MYSQL_PORT: ${MYSQL_PORT:-3306}
       MYSQL_USER: ${MYSQL_USER:-arboris}
@@ -40,6 +42,8 @@ services:
       LINUXDO_TOKEN_URL: ${LINUXDO_TOKEN_URL:-https://connect.linux.do/oauth2/token}
       LINUXDO_USER_INFO_URL: ${LINUXDO_USER_INFO_URL:-https://connect.linux.do/api/user}
     restart: unless-stopped
+    volumes:
+      - ${SQLITE_STORAGE_SOURCE:-sqlite-data}:/app/storage
     networks:
       - app-network
     healthcheck:
@@ -49,12 +53,12 @@ services:
       retries: 3
       start_period: 90s
 
-  # MySQL 数据库服务（可选，使用 profile）
+  # MySQL 数据库服务（通过 profile mysql 启用）
   db:
     image: mysql:8.0
     container_name: arboris-db
     profiles:
-      - with-db
+      - mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-ChangeMe_RootPassword123}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-arboris}
@@ -80,6 +84,8 @@ services:
 
 volumes:
   mysql-data:
+    driver: local
+  sqlite-data:
     driver: local
 
 networks:
