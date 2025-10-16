@@ -45,8 +45,8 @@
 - 根据部署环境调整 `.env` 内的数据库、SMTP、OpenAI 及开关配置。
 
 ### 使用官方镜像
-- 已推送镜像：`tichui251/arboris-app:latest`
-- 推荐执行 `docker pull tichui251/arboris-app:latest` 获取最新版本。
+- 已推送镜像：`tiechui251/arboris-app:latest`
+- 推荐执行 `docker pull tiechui251/arboris-app:latest` 获取最新版本。
 - 镜像标签已在 `docker-compose.yml` 中配置，如需固定版本可自行修改。
 
 ### 使用 Docker Compose 启动
