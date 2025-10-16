@@ -72,6 +72,7 @@
 | `SECRET_KEY` | 是 | JWT 加密密钥，需设置为随机且足够复杂的字符串。 |
 | `ENVIRONMENT` | 否 | 运行环境标识，默认 `production`。 |
 | `DEBUG` | 否 | 是否启用调试日志，默认 `false`。 |
+| `LOGGING_LEVEL` | 否 | 控制应用日志等级，默认 `INFO`，可选 `CRITICAL/ERROR/WARNING/INFO/DEBUG/NOTSET`。 |
 | `DB_PROVIDER` | 否 | 数据库类型，默认 `sqlite`；切换为 `mysql` 时请配合相关命令。 |
 | `SQLITE_STORAGE_SOURCE` | 否 | SQLite 数据存储映射；留空使用命名卷，或设置为宿主机路径/其他卷名。 |
 | `MYSQL_HOST` | 是 | 数据库主机地址，使用内置 MySQL 时保持为 `db`。 |
