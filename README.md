@@ -8,7 +8,7 @@
 
 **交流群:** 
 
-<img width="306" height="304" alt="屏幕截图 2025-10-12 221806" src="https://github.com/user-attachments/assets/e0315a7b-1138-4af3-9c5b-0e519c1705e5" />
+<img width="294" height="295" alt="image" src="https://github.com/user-attachments/assets/90b6819f-896b-4ddf-9946-43d52c8f1c36" />
 
 ---
 <img width="1471" height="880" alt="image" src="https://github.com/user-attachments/assets/a52d0214-bc1b-4792-8a2b-267b09e47379" />
