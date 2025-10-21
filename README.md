@@ -1,8 +1,14 @@
-# Arboris | 给写小说的人，一个有意思的写作空间
+# Arboris-Novel  | 给写小说的人，一个有意思的写作空间
 
-凌晨两点，你盯着屏幕上闪烁的光标，脑子里有个模糊的想法：一个关于时间旅行者的故事。但当你试图把它写下来时，却发现自己卡在了「主角叫什么名字」「故事发生在哪里」「第三章该写什么」这些问题上。
+![GitHub stars](https://img.shields.io/github/stars/t59688/arboris-novel?style=social)
+![GitHub forks](https://img.shields.io/github/forks/t59688/arboris-novel?style=social)
+![GitHub issues](https://img.shields.io/github/issues/t59688/arboris-novel)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-你不是没有才华，只是有时候，一个人扛着整个宇宙太累了。
+
+
+
+你盯着屏幕上闪烁的光标，脑子里有个模糊的想法：一个有意思的故事。但当你试图把它写下来时，却发现自己卡在了「主角叫什么名字」「故事发生在哪里」「第三章该写什么」这些问题上。
 
 **Arboris** 就是在这种时候出现的——它不会替你写作（那样多没意思），但它会在你需要的时候，帮你理清思路、记住细节、提供几个「要不试试这个方向」的建议。
 
@@ -201,14 +207,18 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 ---
 
-## 开源协议
-
-MIT License —— 你可以免费用、改、商用，只需保留版权声明。
-
----
-
 ## 最后说两句
 
 如果你用 Arboris 写出了什么有趣的东西，记得告诉我们。  
 
 祝你写作顺利，故事精彩。
+
+
+
+
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=t59688/arboris-novel&type=Date)](https://star-history.com/#t59688/arboris-novel&Date)
