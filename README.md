@@ -1,106 +1,214 @@
-# Arboris |  AI 写作伙伴，点亮你的创作灵感
+# Arboris | 给写小说的人，一个有意思的写作空间
 
-你是否曾面对空白的文档，灵感枯竭？是否曾被宏大的故事设定、错综复杂的人物关系搞得焦头烂额？
+凌晨两点，你盯着屏幕上闪烁的光标，脑子里有个模糊的想法：一个关于时间旅行者的故事。但当你试图把它写下来时，却发现自己卡在了「主角叫什么名字」「故事发生在哪里」「第三章该写什么」这些问题上。
 
-**Arboris** 为每一位小说家而生。它不仅仅是一个写作工具，更是你的专属 AI 创意伙伴，致力于将你从繁琐的构思与整理工作中解放出来，让你专注于创作本身——那个最激动人心的部分。
+你不是没有才华，只是有时候，一个人扛着整个宇宙太累了。
 
-**在线体验:** [https://arboris.aozhiai.com](https://arboris.aozhiai.com)
+**Arboris** 就是在这种时候出现的——它不会替你写作（那样多没意思），但它会在你需要的时候，帮你理清思路、记住细节、提供几个「要不试试这个方向」的建议。
 
-**交流群:** 
-
-<img width="294" height="295" alt="image" src="https://github.com/user-attachments/assets/90b6819f-896b-4ddf-9946-43d52c8f1c36" />
-
----
-<img width="1471" height="880" alt="image" src="https://github.com/user-attachments/assets/a52d0214-bc1b-4792-8a2b-267b09e47379" />
-<img width="1375" height="872" alt="image" src="https://github.com/user-attachments/assets/0673faad-43df-4479-83ae-cffa870199a3" />
-<img width="1392" height="852" alt="image" src="https://github.com/user-attachments/assets/b7a7af24-1689-4341-aa78-26b0d74bdddd" />
-<img width="1255" height="882" alt="image" src="https://github.com/user-attachments/assets/c831d746-8c1a-4ce8-aa1c-9b852da15c11" />
+**在线体验：** [https://arboris.aozhiai.com](https://arboris.aozhiai.com) 
+ 
+**有问题想聊？加群：**  
+<p align="center">
+  <img width="294" alt="交流群二维码" src="https://github.com/user-attachments/assets/90b6819f-896b-4ddf-9946-43d52c8f1c36" />
+</p>
 
 ---
 
-## ✨ Arboris 能为你做什么？
+## 截图看看长什么样
 
-在这里，你只需提出一个模糊的想法，AI 就能为你……
+<p align="center">
+  <img width="1471" alt="主界面" src="https://github.com/user-attachments/assets/a52d0214-bc1b-4792-8a2b-267b09e47379" />
+</p>
+<p align="center">
+  <img width="1375" alt="角色管理" src="https://github.com/user-attachments/assets/0673faad-43df-4479-83ae-cffa870199a3" />
+</p>
+<p align="center">
+  <img width="1392" alt="大纲编辑" src="https://github.com/user-attachments/assets/b7a7af24-1689-4341-aa78-26b0d74bdddd" />
+</p>
+<p align="center">
+  <img width="1255" alt="写作界面" src="https://github.com/user-attachments/assets/c831d746-8c1a-4ce8-aa1c-9b852da15c11" />
+</p>
 
-- **🌱 孕育世界**: 从零开始构建一个全新的世界观，包括独特的派系、关键的地点和丰富的背景设定。
-- **🎭 塑造角色**: 创造有血有肉的角色，并用一张清晰的关系网将他们联系起来，让人物关系一目了然。
-- **🗺️ 规划蓝图**: 将灵感火花扩展成完整的故事大纲，从开端、发展到高潮，情节脉络清晰可见。
-- **✍️ 挥洒文墨**: 在你的指导下，AI 可以撰写完整的章节草稿。它会提供多个版本供你挑选、修改，如同与一位不知疲倦的写手并肩作战。
+---
 
-### 核心亮点
+## 它能帮你干什么？
 
-- **交互式写作台**: 一个沉浸式的创作空间，你可以在这里与 AI 对话、下达指令、编辑和优化生成的文本。
-- **版本与评估**: AI 生成的每个草稿都会被妥善保存。你可以对比不同版本，标记出满意的部分，教会 AI 更懂你的风格。
-- **项目式管理**: 将每部小说作为一个独立项目进行管理，所有设定、大纲、章节都井井有条，告别混乱。
-- **高度可定制**: 从驱动 AI 的核心提示词（Prompt）到模型的 API 设置，一切尽在你的掌控之中。你可以通过后台轻松调整，让 Arboris 更符合你的创作习惯。
-- **一键部署**: 我们提供完整的 Docker 配置，只需一条命令，即可在你自己的服务器上拥有一个专属的 AI 写作助手。
+### 📖 管住那些跑偏的设定
+写到第五十章突然想不起来男二号的眼睛是什么颜色？世界观里的魔法体系到底有几个等级？  
+Arboris 帮你把所有角色、地点、派系的设定都记下来，随时翻阅，再也不会前后矛盾。
 
+### 🧵 把乱糟糟的灵感捋成故事线
+脑子里有十几个场景片段，但不知道怎么串起来？  
+和 AI 聊聊你的想法，它会帮你梳理出一条主线，从开头到结局的大纲自然就出来了。
 
-## 🚀 立即开始
+### ✍️ 有个不会累的写作搭档
+今天状态不好，但又不想断更？让 AI 先写个草稿，你再根据自己的风格改改。  
+或者反过来——你写了开头，让它接着往下试试，没准能给你意想不到的灵感。
 
-拥有自己的 Arboris 过程非常简单。
+### 🔄 多版本对比，找到最对味的那一版
+AI 生成的内容不一定第一次就完美，但你可以让它多试几版，挑出最喜欢的部分，慢慢"训练"它懂你的笔触。
 
-### 准备环境
-- 复制环境变量模板：`cp .env.example .env`
-- 根据部署环境调整 `.env` 内的数据库、SMTP、OpenAI 及开关配置。
+---
 
-### 使用官方镜像
-- 已推送镜像：`tiechui251/arboris-app:latest`
-- 推荐执行 `docker pull tiechui251/arboris-app:latest` 获取最新版本。
-- 镜像标签已在 `docker-compose.yml` 中配置，如需固定版本可自行修改。
+## 为什么要做这个？
 
-### 使用 Docker Compose 启动
-1. 确认 `.env` 与 `docker-compose.yml` 位于同一目录。
-2. 默认使用 SQLite（无需数据库服务），直接执行：
-   ```bash
-   docker compose up -d
-   ```
-   > 如需将 SQLite 数据库文件映射到宿主机路径，可在 `.env` 中设置 `SQLITE_STORAGE_SOURCE=./storage` 或绝对路径。
-3. 若需启用内置 MySQL，请在命令前设置 `DB_PROVIDER=mysql` 并启用 `mysql` profile：
-   ```bash
-   DB_PROVIDER=mysql docker compose --profile mysql up -d
-   ```
-4. 若连接外部 MySQL，同样需设置 `DB_PROVIDER=mysql`，但无需开启 profile：
-   ```bash
-   DB_PROVIDER=mysql docker compose up -d
-   ```
+因为我觉得我们需要的不是一个"自动生成器"，而是一个**能记住你的世界、理解你的角色、陪你一起推进故事的伙伴**。
 
-### 环境变量摘要
-| 变量 | 必填 | 说明 |
-| --- | --- | --- |
-| `APP_PORT` | 否 | 映射到宿主机的 HTTP 端口，默认 `80`。 |
-| `SECRET_KEY` | 是 | JWT 加密密钥，需设置为随机且足够复杂的字符串。 |
-| `ENVIRONMENT` | 否 | 运行环境标识，默认 `production`。 |
-| `DEBUG` | 否 | 是否启用调试日志，默认 `false`。 |
-| `LOGGING_LEVEL` | 否 | 控制应用日志等级，默认 `INFO`，可选 `CRITICAL/ERROR/WARNING/INFO/DEBUG/NOTSET`。 |
-| `DB_PROVIDER` | 否 | 数据库类型，默认 `sqlite`；切换为 `mysql` 时请配合相关命令。 |
-| `SQLITE_STORAGE_SOURCE` | 否 | SQLite 数据存储映射；留空使用命名卷，或设置为宿主机路径/其他卷名。 |
-| `MYSQL_HOST` | 是 | 数据库主机地址，使用内置 MySQL 时保持为 `db`。 |
-| `MYSQL_PORT` | 否 | 数据库端口，默认 `3306`。 |
-| `MYSQL_USER` | 是 | 应用使用的数据库用户名。 |
-| `MYSQL_PASSWORD` | 是 | 应用数据库密码。 |
-| `MYSQL_DATABASE` | 是 | 应用数据库名称，默认 `arboris`。 |
-| `MYSQL_ROOT_PASSWORD` | 使用内置数据库时必填 | 内置 MySQL 的 root 密码，外部数据库部署可忽略。 |
-| `ADMIN_DEFAULT_USERNAME` | 否 | 首次启动的管理员用户名，默认 `admin`。 |
-| `ADMIN_DEFAULT_PASSWORD` | 否 | 首次启动的管理员密码，部署后请尽快修改。 |
-| `ADMIN_DEFAULT_EMAIL` | 否 | 管理员默认邮箱 |
-| `OPENAI_API_KEY` | 视业务需求 | LLM 密钥，用于AI生成,必填。 |
-| `OPENAI_API_BASE_URL` | 是 | LLM API 地址，默认官方 `https://api.openai.com/v1`。 |
-| `OPENAI_MODEL_NAME` | 是 | 调用的模型名称，默认 `gpt-3.5-turbo`。 |
-| `WRITER_CHAPTER_VERSION_COUNT` | 否 | 作家模式中保留的章节版本数量，默认 `2`。 |
-| `SMTP_SERVER` | 否（开启注册时必填） | SMTP 服务器地址。 |
-| `SMTP_PORT` | 否 | SMTP 端口，默认 `465`（SSL）。 |
-| `SMTP_USERNAME` | 必填（开启邮件时） | SMTP 登录账号。 |
-| `SMTP_PASSWORD` | 必填（开启邮件时） | SMTP 登录密码或授权码。 |
-| `EMAIL_FROM` | 否 | 邮件显示的发件人名称，默认 “拯救小说家”。 |
-| `ALLOW_USER_REGISTRATION` | 否 | 是否开放用户自助注册，默认 `false`。 |
-| `ENABLE_LINUXDO_LOGIN` | 否 | 是否开启 Linux.do OAuth 登录，默认 `false`。 |
-| `LINUXDO_CLIENT_ID` | 启用 Linux.do 时必填 | OAuth Client ID。 |
-| `LINUXDO_CLIENT_SECRET` | 启用 Linux.do 时必填 | OAuth Client Secret。 |
-| `LINUXDO_REDIRECT_URI` | 启用 Linux.do 时必填 | 授权回调地址，应指向 `/api/auth/linuxdo/register`。 |
-| `LINUXDO_AUTH_URL` | 否 | 授权地址，默认官方地址。 |
-| `LINUXDO_TOKEN_URL` | 否 | 获取 token 的地址，默认官方地址。 |
-| `LINUXDO_USER_INFO_URL` | 否 | 用户信息查询地址，默认官方地址。 |
+所以我们做了 Arboris，并且决定**开源**——因为好的工具应该属于所有创作者。
 
-> 其余可选参数与示例说明详见 `.env.example` 注释。
+---
 
+## 快速开始（真的很快）
+
+### 方式一：直接用 Docker 跑起来
+
+```bash
+# 1. 复制配置文件
+cp .env.example .env
+
+# 2. 改几个必填项（用你喜欢的编辑器打开 .env）
+#    - SECRET_KEY: 随便敲点字符，越长越安全
+#    - OPENAI_API_KEY: 你的大模型 API Key
+#    - ADMIN_DEFAULT_PASSWORD: 管理员密码，别用默认的
+
+# 3. 启动（默认用 SQLite，不需要装数据库）
+docker compose up -d
+
+# 搞定！浏览器打开 http://localhost:<端口> 就能用了
+```
+
+### 方式二：我想用 MySQL
+
+```bash
+# 在 .env 里改一下 DB_PROVIDER=mysql
+# 然后用这个命令启动（会自动带上 MySQL 容器）
+DB_PROVIDER=mysql docker compose --profile mysql up -d
+```
+
+### 方式三：我有自己的 MySQL 服务器
+
+```bash
+# 在 .env 里填好你的数据库地址、用户名、密码
+# 然后正常启动
+DB_PROVIDER=mysql docker compose up -d
+```
+
+---
+
+## 环境变量速查表
+
+这些是你可能需要改的配置（完整列表在 `.env.example` 里）：
+
+| 配置项 | 必填吗 | 说明 |
+|--------|--------|------|
+| `SECRET_KEY` | ✅ | JWT 加密密钥，自己随机生成一串，别告诉别人 |
+| `OPENAI_API_KEY` | ✅ | 你的 LLM API Key（OpenAI 或兼容的） |
+| `OPENAI_API_BASE_URL` | ❌ | API 地址，默认是 OpenAI 官方的 |
+| `OPENAI_MODEL_NAME` | ❌ | 模型名称，默认 `gpt-3.5-turbo` |
+| `ADMIN_DEFAULT_PASSWORD` | ❌ | 管理员初始密码，**部署后记得改** |
+| `ALLOW_USER_REGISTRATION` | ❌ | 要不要开放注册？默认不开（`false`） |
+| `SMTP_SERVER` / `SMTP_USERNAME` | 开注册就得填 | 邮件服务配置，用来发验证码 |
+
+> 💡 **数据存哪？**  
+> 默认用 SQLite，数据存在 Docker 卷里。想映射到本地？在 `.env` 里设置 `SQLITE_STORAGE_SOURCE=./storage` 就行。
+
+---
+
+## 一些常见问题
+
+**Q: 我不会 Docker 怎么办？**  
+A: 装一下 Docker Desktop（Windows/Mac）或者 Docker Engine（Linux），然后复制粘贴上面的命令就行。真的不难。
+
+**Q: 我的 API Key 会不会泄露？**  
+A: 不会。密钥存在服务器的 `.env` 文件里，不会暴露给前端或用户。
+
+**Q: 可以用其它的大模型吗？**  
+A: 只要提供 OpenAI 兼容接口，都可以。改一下 `OPENAI_API_BASE_URL` 就行。
+
+**Q: 我改了代码怎么办？**  
+A: 欢迎！提 PR 或者 Issue 都行。。
+
+---
+
+## 技术栈（给开发者看的）
+
+- **后端：** Python + FastAPI
+- **数据库：** SQLite（默认）或 MySQL+libsql
+- **前端：** Vue +TailwindCSS
+- **部署：** Docker + Docker Compose
+- **AI 对接：** OpenAI API（或兼容接口）
+
+---
+
+## 面向开发者
+
+### 环境准备
+
+- Python 3.10+（建议使用虚拟环境）
+- Node.js 18+ 与 npm
+- pip / virtualenv（或你习惯的依赖管理工具）
+- 可选：Docker 与 Docker Compose（用于一键部署与发布）
+
+### 后端本地开发
+
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate  # Windows 使用 .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+默认会监听 `http://127.0.0.1:8000`，你可以通过 `--host`、`--port` 调整，或加上 `--reload` 保持热重载。
+
+### 前端本地开发
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+开发服务器默认运行在 `http://127.0.0.1:5173`，可通过 `--host` 参数暴露给局域网设备。
+
+### 打包与构建
+
+- 前端：`npm run build`，构建产物位于 `frontend/dist/`
+- 后端：确认依赖锁定后，可使用 `pip install -r requirements.txt` 安装到目标环境，或基于 `deploy/Dockerfile` 构建镜像
+- 静态文件托管：生产环境下可用 Nginx 等服务托管 `dist` 目录，并由后端提供 API
+
+### 发布与部署
+
+推荐在根目录下使用 Compose 文件完成一体化部署：
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+```
+
+如需推送镜像，可在 `deploy` 目录执行 `docker build -t <registry>/arboris:<tag> .`，测试后再 `docker push` 发布。
+
+---
+
+## 参与贡献
+
+如果你觉得这个项目有意思，欢迎：
+
+- ⭐ 给个 Star
+- 🐛 提 Bug 或建议（在 Issues 里）
+- 💻 贡献代码（PR 我们都会认真看）
+- 💬 加群聊天（二维码在最上面）
+
+---
+
+## 开源协议
+
+MIT License —— 你可以免费用、改、商用，只需保留版权声明。
+
+---
+
+## 最后说两句
+
+如果你用 Arboris 写出了什么有趣的东西，记得告诉我们。  
+
+祝你写作顺利，故事精彩。
