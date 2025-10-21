@@ -55,6 +55,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制后端应用代码
 COPY backend/ ./
 
+# 清理可能被带入的 SQLite 数据文件，确保首次启动时根据环境变量初始化管理员密码
+RUN rm -rf /app/storage && mkdir -p /app/storage
+
 # 从前端构建阶段复制静态资源到 nginx 默认目录
 COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 
