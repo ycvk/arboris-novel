@@ -16,6 +16,7 @@ from .novel import (
 from .prompt import Prompt
 from .update_log import UpdateLog
 from .usage_metric import UsageMetric
+from .rag_metrics import RAGRetrievalLog
 from .user import User
 from .user_daily_request import UserDailyRequest
 from .system_config import SystemConfig
@@ -35,6 +36,7 @@ __all__ = [
     "Prompt",
     "UpdateLog",
     "UsageMetric",
+    "RAGRetrievalLog",
     "User",
     "UserDailyRequest",
     "SystemConfig",

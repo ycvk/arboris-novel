@@ -47,3 +47,30 @@ class AdminNovelSummary(BaseModel):
     last_edited: str
     completed_chapters: int
     total_chapters: int
+
+
+class RAGProjectStat(BaseModel):
+    project_id: str
+    title: Optional[str] = None
+    chunks: int = 0
+    summaries: int = 0
+
+
+class RAGStatus(BaseModel):
+    enabled: bool
+    provider: str
+    url: Optional[str] = None
+    collection_prefix: Optional[str] = None
+    embedding_model: Optional[str] = None
+    embedding_dim: Optional[int] = None
+    top_k_chunks: int
+    top_k_summaries: int
+    chunk_size: int
+    chunk_overlap: int
+    total_chunks: int
+    total_summaries: int
+    top_projects: list[RAGProjectStat] = []
+    # 近 7 天运行指标
+    avg_latency_ms_7d: Optional[float] = None
+    empty_recall_rate_7d: Optional[float] = None
+    duplicate_chunk_rate_7d: Optional[float] = None

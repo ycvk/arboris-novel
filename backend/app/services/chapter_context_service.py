@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+import time
 from typing import List, Optional
 
 from ..core.config import settings
 from ..services.llm_service import LLMService
 from .vector_store_service import RetrievedChunk, RetrievedSummary, VectorStoreService
+from ..repositories.rag_metrics_repository import RAGMetricsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +58,7 @@ class ChapterContextService:
     ) -> None:
         self._llm_service = llm_service
         self._vector_store = vector_store
+        self._session = llm_service.session
 
     async def retrieve_for_generation(
         self,
@@ -72,11 +75,15 @@ class ChapterContextService:
             logger.debug("向量库未启用或初始化失败，跳过检索: project=%s", project_id)
             return ChapterRAGContext(query=query, chunks=[], summaries=[])
 
+        start = time.perf_counter()
         embedding_model = None if settings.embedding_provider == "ollama" else settings.embedding_model
         embedding = await self._llm_service.get_embedding(query, user_id=user_id, model=embedding_model)
         if not embedding:
             logger.warning("检索查询向量生成失败: project=%s chapter_query=%s", project_id, query)
-            return ChapterRAGContext(query=query, chunks=[], summaries=[])
+            ctx = ChapterRAGContext(query=query, chunks=[], summaries=[])
+            # 记录一次空检索（无向量）
+            await self._log_metrics(project_id, latency_ms=int((time.perf_counter() - start) * 1000), chunks=[], summaries=[])
+            return ctx
 
         chunks = await self._vector_store.query_chunks(
             project_id=project_id,
@@ -88,6 +95,7 @@ class ChapterContextService:
             embedding=embedding,
             top_k=top_k_summaries,
         )
+        latency_ms = int((time.perf_counter() - start) * 1000)
         logger.info(
             "章节上下文检索完成: project=%s chunks=%d summaries=%d query_preview=%s",
             project_id,
@@ -95,7 +103,77 @@ class ChapterContextService:
             len(summaries),
             query[:80],
         )
+        await self._log_metrics(project_id, latency_ms=latency_ms, chunks=chunks, summaries=summaries)
         return ChapterRAGContext(query=query, chunks=chunks, summaries=summaries)
+
+    async def _log_metrics(
+        self,
+        project_id: str,
+        *,
+        latency_ms: int,
+        chunks: List[RetrievedChunk],
+        summaries: List[RetrievedSummary],
+    ) -> None:
+        """记录一次检索的指标：延迟、结果规模、重复片段率。"""
+        try:
+            repo = RAGMetricsRepository(self._session)
+            duplicate_ratio = self._compute_duplicate_ratio([c.content or "" for c in chunks])
+            provider = getattr(self._vector_store, "_provider", "libsql") if self._vector_store else "none"
+            await repo.add(
+                project_id=project_id,
+                latency_ms=latency_ms,
+                chunk_count=len(chunks),
+                summary_count=len(summaries),
+                duplicate_ratio=duplicate_ratio,
+                provider=str(provider),
+            )
+        except Exception as exc:  # pragma: no cover - 记录失败不影响主流程
+            logger.debug("记录 RAG 指标失败: %s", exc)
+
+    @staticmethod
+    def _norm_text(text: str) -> str:
+        # 统一空白，去除多余空格与换行
+        return "".join(text.split())
+
+    @staticmethod
+    def _shingles(text: str, k: int = 3) -> set[str]:
+        # 基于字符的 k-gram，适配中文/英文混排，无需额外分词
+        if not text:
+            return set()
+        if len(text) <= k:
+            return {text}
+        return {text[i : i + k] for i in range(0, len(text) - k + 1)}
+
+    @classmethod
+    def _jaccard_sim(cls, a: str, b: str, k: int = 3) -> float:
+        sa = cls._shingles(cls._norm_text(a), k=k)
+        sb = cls._shingles(cls._norm_text(b), k=k)
+        if not sa and not sb:
+            return 1.0
+        if not sa or not sb:
+            return 0.0
+        inter = len(sa & sb)
+        union = len(sa | sb)
+        return inter / union if union > 0 else 0.0
+
+    def _compute_duplicate_ratio(self, texts: list[str]) -> float:
+        total = len(texts)
+        if total <= 1:
+            return 0.0
+        threshold = settings.rag_duplicate_similarity_threshold
+        representatives: list[str] = []
+        dups = 0
+        for t in texts:
+            matched = False
+            for rep in representatives:
+                if self._jaccard_sim(t, rep, k=3) >= threshold:
+                    matched = True
+                    break
+            if matched:
+                dups += 1
+            else:
+                representatives.append(t)
+        return dups / total
 
     @staticmethod
     def _normalize(text: str) -> str:

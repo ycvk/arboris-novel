@@ -32,6 +32,8 @@ from ...services.novel_service import NovelService
 from ...services.prompt_service import PromptService
 from ...services.update_log_service import UpdateLogService
 from ...services.user_service import UserService
+from ...services.rag_status_service import RAGStatusService
+from ...schemas.admin import RAGStatus
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
@@ -63,6 +65,10 @@ def get_user_service(session: AsyncSession = Depends(get_session)) -> UserServic
 
 def get_auth_service(session: AsyncSession = Depends(get_session)) -> AuthService:
     return AuthService(session)
+
+
+def get_rag_status_service(session: AsyncSession = Depends(get_session)) -> RAGStatusService:
+    return RAGStatusService(session)
 
 
 @router.get("/stats", response_model=Statistics)
@@ -315,6 +321,12 @@ async def patch_system_config(
         raise HTTPException(status_code=404, detail="配置项不存在")
     logger.info("管理员部分更新系统配置：%s", key)
     return config
+
+
+@router.get("/rag/status", response_model=RAGStatus)
+async def read_rag_status(service: RAGStatusService = Depends(get_rag_status_service), _: None = Depends(get_current_admin)) -> RAGStatus:
+    """读取向量检索（RAG）的运行状态与核心指标。"""
+    return await service.get_status(top_n_projects=5)
 
 
 @router.delete("/system-configs/{key}", status_code=status.HTTP_204_NO_CONTENT)
