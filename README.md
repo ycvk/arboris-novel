@@ -64,35 +64,53 @@ AI 生成的内容不一定第一次就完美，但你可以让它多试几版�
 ### 方式一：直接用 Docker 跑起来
 
 ```bash
-# 1. 复制配置文件
-cp .env.example .env
+# 1) 在 deploy 目录配置环境变量（首次可从示例复制）
+cp deploy/.env.example deploy/.env  # 若无示例，可手动创建 deploy/.env
+# 必填示例：
+#   SECRET_KEY=请填随机长字符串
+#   OPENAI_API_KEY=你的LLM Key（或兼容接口）
+#   ADMIN_DEFAULT_PASSWORD=管理员初始密码（部署后务必改密）
 
-# 2. 改几个必填项（用你喜欢的编辑器打开 .env）
-#    - SECRET_KEY: 随便敲点字符，越长越安全
-#    - OPENAI_API_KEY: 你的大模型 API Key
-#    - ADMIN_DEFAULT_PASSWORD: 管理员密码，别用默认的
+# 2) 一键启动（默认使用 SQLite）
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 
-# 3. 启动（默认用 SQLite，不需要装数据库）
-docker compose up -d
-
-# 搞定！浏览器打开 http://localhost:<端口> 就能用了
+# 浏览器访问：http://localhost:${APP_PORT:-80}
 ```
 
 ### 方式二：我想用 MySQL
 
 ```bash
-# 在 .env 里改一下 DB_PROVIDER=mysql
-# 然后用这个命令启动（会自动带上 MySQL 容器）
-DB_PROVIDER=mysql docker compose --profile mysql up -d
+# 在 deploy/.env 设置 DB_PROVIDER=mysql
+# 然后启用 profile（会自动启动 MySQL 容器）
+DB_PROVIDER=mysql docker compose --env-file deploy/.env -f deploy/docker-compose.yml --profile mysql up -d --build
 ```
 
 ### 方式三：我有自己的 MySQL 服务器
 
 ```bash
-# 在 .env 里填好你的数据库地址、用户名、密码
+# 在 deploy/.env 里填好你的数据库地址、用户名、密码
 # 然后正常启动
-DB_PROVIDER=mysql docker compose up -d
+DB_PROVIDER=mysql docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 ```
+
+### 配置生效规则（很关键）
+
+- Compose 的环境变量读取来自执行命令的当前目录 `.env`；建议显式指定：
+  - `docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build`
+- 容器部署时，后端应用读取 OS 环境变量（由 Compose 注入），与 `backend/.env` 无关；`backend/.env` 仅用于本地 `uvicorn` 开发运行。
+- LLM 配置“真源”在数据库 system_configs：
+  - 首次启动会把 `OPENAI_API_KEY/OPENAI_API_BASE_URL/OPENAI_MODEL_NAME` 注入为默认值（分别为 `llm.api_key/llm.base_url/llm.model`）。
+  - 之后修改 deploy/.env 不会覆盖数据库已有值；请在 /admin 的“系统配置”中修改，或调用 `/api/admin/system-configs/*` API。
+  - 可选：`LLM_COMPLETION_MAX_TOKENS`（限制聊天补全最大输出 token）；若未设置将不传递该参数。
+
+### RAG（向量库）选择与启用
+
+- 本仓库内置 Qdrant 服务（推荐），Compose 已默认启用并将 `VECTOR_DB_PROVIDER=qdrant`：
+  - `VECTOR_DB_URL=http://qdrant:6333`
+  - `QDRANT_COLLECTION_PREFIX=arboris`（派生 `<prefix>_chunks` 与 `<prefix>_summaries`）
+- 如需回退至 libsql（单机轻量）：
+  - 将 `VECTOR_DB_PROVIDER=libsql`，并设置 `VECTOR_DB_URL=file:./storage/rag_vectors.db`
+- 注意：提供方与 URL 类型需匹配；若设置 `qdrant` 但 URL 为 `file:`，系统将自动回退到 libsql。
 
 ---
 
@@ -132,6 +150,8 @@ A: 欢迎！提 PR 或者 Issue 都行。。
 ---
 
 ## 技术栈（给开发者看的）
+
+- 参阅架构图与关键时序：见 `docs/architecture.md`
 
 - **后端：** Python + FastAPI
 - **数据库：** SQLite（默认）或 MySQL+libsql
