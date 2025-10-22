@@ -70,6 +70,12 @@ class Settings(BaseSettings):
         description="LLM API Base URL",
     )
     openai_model_name: str = Field(default="gpt-4o-mini", env="OPENAI_MODEL_NAME", description="默认 LLM 模型名称")
+    llm_completion_max_tokens: Optional[int] = Field(
+        default=None,
+        ge=1,
+        env="LLM_COMPLETION_MAX_TOKENS",
+        description="聊天补全的最大输出 token 数；未配置时不传递该参数，由提供商默认处理",
+    )
     writer_chapter_versions: int = Field(
         default=2,
         ge=1,

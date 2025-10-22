@@ -44,14 +44,17 @@ class LLMService:
         user_id: Optional[int] = None,
         timeout: float = 300.0,
         response_format: Optional[str] = "json_object",
+        max_tokens: Optional[int] = None,
     ) -> str:
         messages = [{"role": "system", "content": system_prompt}, *conversation_history]
+        effective_max_tokens = max_tokens if max_tokens is not None else settings.llm_completion_max_tokens
         return await self._stream_and_collect(
             messages,
             temperature=temperature,
             user_id=user_id,
             timeout=timeout,
             response_format=response_format,
+            max_tokens=effective_max_tokens,
         )
 
     async def get_summary(
@@ -72,7 +75,13 @@ class LLMService:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": chapter_content},
         ]
-        return await self._stream_and_collect(messages, temperature=temperature, user_id=user_id, timeout=timeout)
+        return await self._stream_and_collect(
+            messages,
+            temperature=temperature,
+            user_id=user_id,
+            timeout=timeout,
+            max_tokens=settings.llm_completion_max_tokens,
+        )
 
     async def _stream_and_collect(
         self,
@@ -82,6 +91,7 @@ class LLMService:
         user_id: Optional[int],
         timeout: float,
         response_format: Optional[str] = None,
+        max_tokens: Optional[int] = None,
     ) -> str:
         config = await self._resolve_llm_config(user_id)
         client = LLMClient(api_key=config["api_key"], base_url=config.get("base_url"))
@@ -105,6 +115,7 @@ class LLMService:
                 temperature=temperature,
                 timeout=int(timeout),
                 response_format=response_format,
+                max_tokens=max_tokens,
             ):
                 if part.get("content"):
                     full_response += part["content"]
