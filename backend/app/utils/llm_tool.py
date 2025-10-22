@@ -56,10 +56,15 @@ class LLMClient:
 
         stream = await self._client.chat.completions.create(**payload)
         async for chunk in stream:
-            if not chunk.choices:
+            # 兼容增量块中可能缺失 choices 或 delta 的情况
+            choices = getattr(chunk, "choices", None)
+            if not choices:
                 continue
-            choice = chunk.choices[0]
+            choice = choices[0]
+            delta = getattr(choice, "delta", None)
+            content_piece = getattr(delta, "content", None) if delta is not None else None
+            finish_reason = getattr(choice, "finish_reason", None)
             yield {
-                "content": choice.delta.content,
-                "finish_reason": choice.finish_reason,
+                "content": content_piece,
+                "finish_reason": finish_reason,
             }
