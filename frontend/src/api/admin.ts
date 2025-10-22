@@ -268,4 +268,9 @@ export class AdminAPI {
       })
     })
   }
+
+  // RAG status
+  static getRAGStatus(): Promise<any> {
+    return this.request('/rag/status')
+  }
 }

@@ -86,6 +86,7 @@ type MenuKey =
   | 'logs'
   | 'settings'
   | 'password'
+  | 'rag'
 
 const components: Record<MenuKey, ReturnType<typeof defineAsyncComponent>> = {
   statistics: defineAsyncComponent(() => import('../components/admin/Statistics.vue')),
@@ -94,7 +95,8 @@ const components: Record<MenuKey, ReturnType<typeof defineAsyncComponent>> = {
   novels: defineAsyncComponent(() => import('../components/admin/NovelManagement.vue')),
   logs: defineAsyncComponent(() => import('../components/admin/UpdateLogManagement.vue')),
   settings: defineAsyncComponent(() => import('../components/admin/SettingsManagement.vue')),
-  password: defineAsyncComponent(() => import('../components/admin/PasswordManagement.vue'))
+  password: defineAsyncComponent(() => import('../components/admin/PasswordManagement.vue')),
+  rag: defineAsyncComponent(() => import('../components/admin/RAGStatus.vue')),
 }
 
 const iconRenderers: Record<MenuKey, () => any> = {
@@ -104,11 +106,13 @@ const iconRenderers: Record<MenuKey, () => any> = {
   novels: () => h('span', { class: 'menu-icon' }, '📚'),
   logs: () => h('span', { class: 'menu-icon' }, '📝'),
   settings: () => h('span', { class: 'menu-icon' }, '⚙️'),
-  password: () => h('span', { class: 'menu-icon' }, '🔒')
+  password: () => h('span', { class: 'menu-icon' }, '🔒'),
+  rag: () => h('span', { class: 'menu-icon' }, '🧠'),
 }
 
 const menuOptions: MenuOption[] = [
   { key: 'statistics', label: '数据总览', icon: iconRenderers.statistics },
+  { key: 'rag', label: 'RAG 状态', icon: iconRenderers.rag },
   { key: 'users', label: '用户管理', icon: iconRenderers.users },
   { key: 'prompts', label: '提示词管理', icon: iconRenderers.prompts },
   { key: 'novels', label: '小说项目', icon: iconRenderers.novels },
