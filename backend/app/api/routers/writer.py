@@ -1,15 +1,22 @@
 import json
+import asyncio
 import logging
 import os
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception,
+)
 
 from ...core.config import settings
 from ...core.dependencies import get_current_user
-from ...db.session import get_session
+from ...db.session import get_session, AsyncSessionLocal
 from ...models.novel import Chapter, ChapterOutline
 from ...schemas.novel import (
     DeleteChapterRequest,
@@ -53,6 +60,7 @@ def _extract_tail_excerpt(text: Optional[str], limit: int = 500) -> str:
 async def generate_chapter(
     project_id: str,
     request: GenerateChapterRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
@@ -74,7 +82,8 @@ async def generate_chapter(
     await session.commit()
 
     outlines_map = {item.chapter_number: item for item in project.outlines}
-    # 收集所有可用的历史章节摘要，便于在 Prompt 中提供前情背景
+
+    chapters_needing_summary = []
     completed_chapters = []
     latest_prev_number = -1
     previous_summary_text = ""
@@ -85,25 +94,47 @@ async def generate_chapter(
         if existing.selected_version is None or not existing.selected_version.content:
             continue
         if not existing.real_summary:
-            summary = await llm_service.get_summary(
-                existing.selected_version.content,
-                temperature=0.15,
-                user_id=current_user.id,
-                timeout=180.0,
+            chapters_needing_summary.append(existing)
+        else:
+            completed_chapters.append(
+                {
+                    "chapter_number": existing.chapter_number,
+                    "title": outlines_map.get(existing.chapter_number).title if outlines_map.get(existing.chapter_number) else f"第{existing.chapter_number}章",
+                    "summary": existing.real_summary,
+                }
             )
-            existing.real_summary = remove_think_tags(summary)
-            await session.commit()
-        completed_chapters.append(
-            {
-                "chapter_number": existing.chapter_number,
-                "title": outlines_map.get(existing.chapter_number).title if outlines_map.get(existing.chapter_number) else f"第{existing.chapter_number}章",
-                "summary": existing.real_summary,
-            }
-        )
-        if existing.chapter_number > latest_prev_number:
-            latest_prev_number = existing.chapter_number
-            previous_summary_text = existing.real_summary or ""
-            previous_tail_excerpt = _extract_tail_excerpt(existing.selected_version.content)
+            if existing.chapter_number > latest_prev_number:
+                latest_prev_number = existing.chapter_number
+                previous_summary_text = existing.real_summary or ""
+                previous_tail_excerpt = _extract_tail_excerpt(existing.selected_version.content)
+
+    if chapters_needing_summary:
+        # 为避免复用请求级会话/服务，后台任务内部新建会话与服务并按ID重取数据
+        chapter_ids = [ch.id for ch in chapters_needing_summary if getattr(ch, "id", None)]
+
+        async def generate_missing_summaries_task(project_id_: str, chapter_ids_: List[int], user_id_: int):
+            try:
+                async with AsyncSessionLocal() as bg_session:
+                    bg_llm_service = LLMService(bg_session)
+                    for ch_id in chapter_ids_:
+                        stmt = select(Chapter).where(Chapter.id == ch_id)
+                        result = await bg_session.execute(stmt)
+                        ch = result.scalars().first()
+                        if not ch or not ch.selected_version or not ch.selected_version.content:
+                            continue
+                        summary = await bg_llm_service.get_summary(
+                            ch.selected_version.content,
+                            temperature=0.15,
+                            user_id=user_id_,
+                            timeout=180.0,
+                        )
+                        ch.real_summary = remove_think_tags(summary)
+                        await bg_session.commit()
+                        logger.info("后台生成项目 %s 第 %s 章摘要完成", project_id_, ch.chapter_number)
+            except Exception as exc:
+                logger.exception("后台生成摘要失败: %s", exc)
+
+        background_tasks.add_task(generate_missing_summaries_task, project_id, chapter_ids, current_user.id)
 
     project_schema = await novel_service._serialize_project(project)
     blueprint_dict = project_schema.blueprint.model_dump()
@@ -193,21 +224,34 @@ async def generate_chapter(
     ]
     prompt_input = "\n\n".join(f"{title}\n{content}" for title, content in prompt_sections if content)
     logger.debug("章节写作提示词：%s\n%s", writer_prompt, prompt_input)
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=1, max=10),
+        retry=retry_if_exception(lambda e: isinstance(e, HTTPException) and getattr(e, "status_code", 0) == 503),
+        reraise=True,
+    )
     async def _generate_single_version(idx: int) -> Dict:
         try:
-            response = await llm_service.get_llm_response(
-                system_prompt=writer_prompt,
-                conversation_history=[{"role": "user", "content": prompt_input}],
-                temperature=0.9,
-                user_id=current_user.id,
-                timeout=600.0,
-            )
+            # 为避免并发使用同一个会话导致 Session is already flushing，
+            # 每个并发任务使用独立的会话与服务实例
+            async with AsyncSessionLocal() as local_session:
+                local_llm_service = LLMService(local_session)
+                response = await local_llm_service.get_llm_response(
+                    system_prompt=writer_prompt,
+                    conversation_history=[{"role": "user", "content": prompt_input}],
+                    temperature=0.9,
+                    user_id=current_user.id,
+                    timeout=600.0,
+                )
             cleaned = remove_think_tags(response)
             normalized = unwrap_markdown_json(cleaned)
             try:
-                return json.loads(normalized)
+                parsed = json.loads(normalized)
+                parsed.setdefault("status", "success")
+                return parsed
             except json.JSONDecodeError:
-                return {"content": normalized}
+                return {"content": normalized, "status": "success"}
         except Exception as exc:
             logger.exception(
                 "项目 %s 生成第 %s 章第 %s 个版本时发生异常: %s",
@@ -216,7 +260,11 @@ async def generate_chapter(
                 idx + 1,
                 exc,
             )
-            return {"content": f"生成失败: {exc}"}
+            return {
+                "content": f"生成失败: {exc}",
+                "status": "failed",
+                "error": str(exc),
+            }
 
     version_count = await _resolve_version_count(session)
     logger.info(
@@ -225,9 +273,8 @@ async def generate_chapter(
         request.chapter_number,
         version_count,
     )
-    raw_versions = []
-    for idx in range(version_count):
-        raw_versions.append(await _generate_single_version(idx))
+    tasks = [_generate_single_version(idx) for idx in range(version_count)]
+    raw_versions = await asyncio.gather(*tasks)
     contents: List[str] = []
     metadata: List[Dict] = []
     for variant in raw_versions:
@@ -278,6 +325,7 @@ async def _resolve_version_count(session: AsyncSession) -> int:
 async def select_chapter_version(
     project_id: str,
     request: SelectVersionRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
@@ -308,7 +356,6 @@ async def select_chapter_version(
         chapter.real_summary = remove_think_tags(summary)
         await session.commit()
 
-        # 选定版本后同步向量库，确保后续章节可检索到最新内容
         vector_store: Optional[VectorStoreService]
         if not settings.vector_store_enabled:
             vector_store = None
@@ -319,23 +366,40 @@ async def select_chapter_version(
                 logger.warning("向量库初始化失败，跳过章节向量同步: %s", exc)
                 vector_store = None
 
-        if vector_store:
-            ingestion_service = ChapterIngestionService(llm_service=llm_service, vector_store=vector_store)
-            outline = next((item for item in project.outlines if item.chapter_number == chapter.chapter_number), None)
-            chapter_title = outline.title if outline and outline.title else f"第{chapter.chapter_number}章"
-            await ingestion_service.ingest_chapter(
-                project_id=project_id,
-                chapter_number=chapter.chapter_number,
-                title=chapter_title,
-                content=selected.content,
-                summary=chapter.real_summary,
-                user_id=current_user.id,
-            )
-            logger.info(
-                "项目 %s 第 %s 章已同步至向量库",
-                project_id,
-                chapter.chapter_number,
-            )
+        if settings.vector_store_enabled:
+            # 后台任务内新建会话与服务，避免复用请求态资源
+            async def ingest_chapter_background_task(project_id_: str, chapter_number_: int, user_id_: int):
+                try:
+                    async with AsyncSessionLocal() as bg_session:
+                        bg_llm_service = LLMService(bg_session)
+                        try:
+                            vector_store_local = VectorStoreService()
+                        except RuntimeError as exc:
+                            logger.warning("向量库初始化失败，跳过章节入库: %s", exc)
+                            return
+                        novel_service_local = NovelService(bg_session)
+                        project_local = await novel_service_local.get_project(project_id_)
+                        outline_local = next((item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
+                        chapter_title_local = outline_local.title if outline_local and outline_local.title else f"第{chapter_number_}章"
+                        stmt = select(Chapter).where(Chapter.project_id == project_id_, Chapter.chapter_number == chapter_number_)
+                        result = await bg_session.execute(stmt)
+                        chapter_local = result.scalars().first()
+                        if not chapter_local or not chapter_local.selected_version or not chapter_local.selected_version.content:
+                            return
+                        ingestion_service = ChapterIngestionService(llm_service=bg_llm_service, vector_store=vector_store_local)
+                        await ingestion_service.ingest_chapter(
+                            project_id=project_id_,
+                            chapter_number=chapter_number_,
+                            title=chapter_title_local,
+                            content=chapter_local.selected_version.content,
+                            summary=chapter_local.real_summary,
+                            user_id=user_id_,
+                        )
+                        logger.info("项目 %s 第 %s 章已同步至向量库", project_id_, chapter_number_)
+                except Exception as exc:
+                    logger.exception("项目 %s 第 %s 章向量入库失败: %s", project_id_, chapter_number_, exc)
+
+            background_tasks.add_task(ingest_chapter_background_task, project_id, chapter.chapter_number, current_user.id)
 
     return await _load_project_schema(novel_service, project_id, current_user.id)
 
@@ -516,6 +580,7 @@ async def update_chapter_outline(
 async def delete_chapters(
     project_id: str,
     request: DeleteChapterRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
@@ -533,7 +598,6 @@ async def delete_chapters(
     )
     await novel_service.delete_chapters(project_id, request.chapter_numbers)
 
-    # 删除章节时同步清理向量库，避免过时内容被检索
     vector_store: Optional[VectorStoreService]
     if not settings.vector_store_enabled:
         vector_store = None
@@ -544,14 +608,20 @@ async def delete_chapters(
             logger.warning("向量库初始化失败，跳过章节向量删除: %s", exc)
             vector_store = None
 
-    if vector_store:
-        ingestion_service = ChapterIngestionService(llm_service=llm_service, vector_store=vector_store)
-        await ingestion_service.delete_chapters(project_id, request.chapter_numbers)
-        logger.info(
-            "项目 %s 已从向量库移除章节 %s",
-            project_id,
-            request.chapter_numbers,
-        )
+    if settings.vector_store_enabled:
+        async def delete_vectors_background_task(project_id_: str, chapter_numbers_: List[int]):
+            try:
+                try:
+                    vector_store_local = VectorStoreService()
+                except RuntimeError as exc:
+                    logger.warning("向量库初始化失败，跳过删除: %s", exc)
+                    return
+                await vector_store_local.delete_by_chapters(project_id_, chapter_numbers_)
+                logger.info("项目 %s 已从向量库移除章节 %s", project_id_, chapter_numbers_)
+            except Exception as exc:
+                logger.exception("项目 %s 向量删除失败: %s", project_id_, exc)
+
+        background_tasks.add_task(delete_vectors_background_task, project_id, request.chapter_numbers)
 
     return await novel_service.get_project_schema(project_id, current_user.id)
 
@@ -560,6 +630,7 @@ async def delete_chapters(
 async def edit_chapter(
     project_id: str,
     request: EditChapterRequest,
+    background_tasks: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
@@ -596,18 +667,40 @@ async def edit_chapter(
             logger.warning("向量库初始化失败，跳过章节向量更新: %s", exc)
             vector_store = None
 
-    if vector_store and chapter.selected_version and chapter.selected_version.content:
-        ingestion_service = ChapterIngestionService(llm_service=llm_service, vector_store=vector_store)
-        outline = next((item for item in project.outlines if item.chapter_number == chapter.chapter_number), None)
-        chapter_title = outline.title if outline and outline.title else f"第{chapter.chapter_number}章"
-        await ingestion_service.ingest_chapter(
-            project_id=project_id,
-            chapter_number=chapter.chapter_number,
-            title=chapter_title,
-            content=chapter.selected_version.content,
-            summary=chapter.real_summary,
-            user_id=current_user.id,
-        )
-        logger.info("项目 %s 第 %s 章更新内容已同步至向量库", project_id, chapter.chapter_number)
+    if settings.vector_store_enabled and chapter.selected_version and chapter.selected_version.content:
+        # 后台任务内新建会话与服务，避免复用请求态资源
+        async def reingest_chapter_background_task(project_id_: str, chapter_number_: int, user_id_: int):
+            try:
+                async with AsyncSessionLocal() as bg_session:
+                    bg_llm_service = LLMService(bg_session)
+                    try:
+                        vector_store_local = VectorStoreService()
+                    except RuntimeError as exc:
+                        logger.warning("向量库初始化失败，跳过章节重建: %s", exc)
+                        return
+                    # 取最新章节与标题
+                    novel_service_local = NovelService(bg_session)
+                    project_local = await novel_service_local.get_project(project_id_)
+                    outline_local = next((item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
+                    chapter_title_local = outline_local.title if outline_local and outline_local.title else f"第{chapter_number_}章"
+                    stmt = select(Chapter).where(Chapter.project_id == project_id_, Chapter.chapter_number == chapter_number_)
+                    result = await bg_session.execute(stmt)
+                    chapter_local = result.scalars().first()
+                    if not chapter_local or not chapter_local.selected_version or not chapter_local.selected_version.content:
+                        return
+                    ingestion_service = ChapterIngestionService(llm_service=bg_llm_service, vector_store=vector_store_local)
+                    await ingestion_service.ingest_chapter(
+                        project_id=project_id_,
+                        chapter_number=chapter_number_,
+                        title=chapter_title_local,
+                        content=chapter_local.selected_version.content,
+                        summary=chapter_local.real_summary,
+                        user_id=user_id_,
+                    )
+                    logger.info("项目 %s 第 %s 章更新内容已同步至向量库", project_id_, chapter_number_)
+            except Exception as exc:
+                logger.exception("项目 %s 第 %s 章向量更新失败: %s", project_id_, chapter_number_, exc)
+
+        background_tasks.add_task(reingest_chapter_background_task, project_id, chapter.chapter_number, current_user.id)
 
     return await novel_service.get_project_schema(project_id, current_user.id)
