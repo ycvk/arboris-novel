@@ -116,12 +116,22 @@ class Settings(BaseSettings):
     vector_db_url: Optional[str] = Field(
         default=None,
         env="VECTOR_DB_URL",
-        description="libsql 向量库连接地址",
+        description="向量库连接地址：libsql 使用 file:/https://，Qdrant 使用 http(s)://host:6333",
     )
     vector_db_auth_token: Optional[str] = Field(
         default=None,
         env="VECTOR_DB_AUTH_TOKEN",
-        description="libsql 访问令牌",
+        description="向量库访问令牌：libsql/Qdrant 兼容",
+    )
+    vector_db_provider: str = Field(
+        default="libsql",
+        env="VECTOR_DB_PROVIDER",
+        description="向量库提供方：libsql 或 qdrant",
+    )
+    qdrant_collection_prefix: str = Field(
+        default="arboris",
+        env="QDRANT_COLLECTION_PREFIX",
+        description="Qdrant 集合名前缀，默认 arboris（将派生 *_chunks 与 *_summaries）",
     )
     vector_top_k_chunks: int = Field(
         default=5,
@@ -146,6 +156,13 @@ class Settings(BaseSettings):
         ge=0,
         env="VECTOR_CHUNK_OVERLAP",
         description="章节分块重叠字数",
+    )
+    rag_duplicate_similarity_threshold: float = Field(
+        default=0.9,
+        ge=0.0,
+        le=1.0,
+        env="RAG_DUPLICATE_SIMILARITY_THRESHOLD",
+        description="RAG 重复片段判定的相似度阈值（Jaccard 基于 3-gram）",
     )
 
     # -------------------- Linux.do OAuth 配置 --------------------
@@ -190,6 +207,12 @@ class Settings(BaseSettings):
         candidate = (value or "mysql").strip().lower()
         if candidate not in {"mysql", "sqlite"}:
             raise ValueError("DB_PROVIDER 仅支持 mysql 或 sqlite")
+        return candidate
+    @validator("vector_db_provider", pre=True)
+    def _normalize_vector_provider(cls, value: Optional[str]) -> str:
+        candidate = (value or "libsql").strip().lower()
+        if candidate not in {"libsql", "qdrant"}:
+            raise ValueError("VECTOR_DB_PROVIDER 仅支持 libsql 或 qdrant")
         return candidate
     @validator("embedding_provider", pre=True)
     def _normalize_embedding_provider(cls, value: Optional[str]) -> str:
