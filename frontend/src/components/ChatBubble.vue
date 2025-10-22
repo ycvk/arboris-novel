@@ -69,7 +69,8 @@ const wrapperClass = computed(() => {
 })
 
 const bubbleClass = computed(() => {
-  const baseClass = 'max-w-md lg:max-w-lg p-4 rounded-lg shadow-md fade-in'
+  // 放宽最大宽度：桌面端更宽（3xl~5xl），移动端保持良好自适应
+  const baseClass = 'max-w-xl md:max-w-2xl lg:max-w-3xl xl:max-w-4xl 2xl:max-w-5xl p-4 rounded-lg shadow-md fade-in'
   const typeClass = props.type === 'ai' ? 'chat-bubble-ai' : 'chat-bubble-user'
   return `${baseClass} ${typeClass}`
 })
