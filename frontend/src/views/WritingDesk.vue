@@ -108,6 +108,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import type { Chapter, ChapterOutline, ChapterGenerationResponse, ChapterVersion } from '@/api/novel'
@@ -144,7 +145,8 @@ const isGeneratingOutline = ref(false)
 const showGenerateOutlineModal = ref(false)
 
 // 计算属性
-const project = computed(() => novelStore.currentProject)
+// 使用 storeToRefs 确保对 currentProject 的响应式订阅稳定
+const { currentProject: project } = storeToRefs(novelStore)
 
 const selectedChapter = computed(() => {
   if (!project.value || selectedChapterNumber.value === null) return null
@@ -408,6 +410,8 @@ const generateChapter = async (chapterNumber: number) => {
     }
 
     await novelStore.generateChapter(chapterNumber)
+    // 生成完成后，立即刷新当前章节状态，避免等待轮询
+    await novelStore.loadChapter(chapterNumber)
     
     // store 中的 project 已经被更新，所以我们不需要手动修改本地状态
     // chapterGenerationResult 也不再需要，因为 availableVersions 会从更新后的 project.chapters 中获取数据
