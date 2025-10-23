@@ -64,6 +64,10 @@ COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 # 复制部署配置
 COPY deploy/nginx.conf /etc/nginx/sites-available/default
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
+
+# 允许入口脚本在启动时修正宿主机挂载目录权限
+RUN chmod +x /app/docker-entrypoint.sh
 
 # 创建非 root 用户（供 supervisor 使用）
 RUN useradd -m -u 1000 appuser && \
@@ -74,4 +78,5 @@ EXPOSE 80
 
 # 使用 supervisor 启动 nginx 和 uvicorn
 # 注意：容器以 root 启动，supervisor 会根据配置降权运行各个进程
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
