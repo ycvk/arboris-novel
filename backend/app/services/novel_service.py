@@ -314,9 +314,9 @@ class NovelService:
         if "full_synopsis" in patch:
             blueprint.full_synopsis = patch["full_synopsis"]
         if "world_setting" in patch and patch["world_setting"] is not None:
+            # 创建新字典对象以触发 SQLAlchemy 的变更检测
             existing = blueprint.world_setting or {}
-            existing.update(patch["world_setting"])
-            blueprint.world_setting = existing
+            blueprint.world_setting = {**existing, **patch["world_setting"]}
         if "characters" in patch and patch["characters"] is not None:
             await self.session.execute(delete(BlueprintCharacter).where(BlueprintCharacter.project_id == project_id))
             for index, data in enumerate(patch["characters"]):

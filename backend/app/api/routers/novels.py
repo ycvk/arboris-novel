@@ -23,7 +23,7 @@ from ...schemas.user import UserInDB
 from ...services.llm_service import LLMService
 from ...services.novel_service import NovelService
 from ...services.prompt_service import PromptService
-from ...utils.json_utils import remove_think_tags, unwrap_markdown_json
+from ...utils.json_utils import remove_think_tags, sanitize_json_like_text, unwrap_markdown_json
 
 logger = logging.getLogger(__name__)
 
@@ -168,15 +168,22 @@ async def converse_with_concept(
 
     try:
         normalized = unwrap_markdown_json(llm_response)
-        parsed = json.loads(normalized)
+        sanitized = sanitize_json_like_text(normalized)
+        parsed = json.loads(sanitized)
     except json.JSONDecodeError as exc:
         logger.exception(
-            "Failed to parse concept converse response: project_id=%s user_id=%s normalized=%s",
+            "Failed to parse concept converse response: project_id=%s user_id=%s error=%s\nOriginal response: %s\nNormalized: %s\nSanitized: %s",
             project_id,
             current_user.id,
-            normalized,
+            exc,
+            llm_response[:1000],
+            normalized[:1000] if 'normalized' in locals() else "N/A",
+            sanitized[:1000] if 'sanitized' in locals() else "N/A",
         )
-        raise HTTPException(status_code=500, detail="AI 返回内容不是有效的 JSON") from exc
+        raise HTTPException(
+            status_code=500,
+            detail=f"概念对话失败，AI 返回的内容格式不正确。请重试或联系管理员。错误详情: {str(exc)}"
+        ) from exc
 
     await novel_service.append_conversation(project_id, "user", user_content)
     await novel_service.append_conversation(project_id, "assistant", normalized)
@@ -206,7 +213,8 @@ async def generate_blueprint(
 
     history_records = await novel_service.list_conversations(project_id)
     if not history_records:
-        raise HTTPException(status_code=400, detail="缺少对话历史，无法生成蓝图")
+        logger.warning("项目 %s 缺少对话历史，无法生成蓝图", project_id)
+        raise HTTPException(status_code=400, detail="缺少对话历史，请先完成概念对话后再生成蓝图")
 
     formatted_history: List[Dict[str, str]] = []
     for record in history_records:
@@ -229,7 +237,11 @@ async def generate_blueprint(
             continue
 
     if not formatted_history:
-        raise HTTPException(status_code=400, detail="无法从历史对话中提取内容")
+        logger.warning("项目 %s 对话历史格式异常，无法提取有效内容", project_id)
+        raise HTTPException(
+            status_code=400,
+            detail="无法从历史对话中提取有效内容，请检查对话历史格式或重新进行概念对话"
+        )
 
     system_prompt = _ensure_prompt(await prompt_service.get_prompt("screenwriting"), "screenwriting")
     blueprint_raw = await llm_service.get_llm_response(
@@ -242,10 +254,22 @@ async def generate_blueprint(
     blueprint_raw = remove_think_tags(blueprint_raw)
 
     blueprint_normalized = unwrap_markdown_json(blueprint_raw)
+    blueprint_sanitized = sanitize_json_like_text(blueprint_normalized)
     try:
-        blueprint_data = json.loads(blueprint_normalized)
+        blueprint_data = json.loads(blueprint_sanitized)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail="蓝图生成失败，请稍后重试") from exc
+        logger.error(
+            "项目 %s 蓝图生成 JSON 解析失败: %s\n原始响应: %s\n标准化后: %s\n清洗后: %s",
+            project_id,
+            exc,
+            blueprint_raw[:500],
+            blueprint_normalized[:500],
+            blueprint_sanitized[:500],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"蓝图生成失败，AI 返回的内容格式不正确。请重试或联系管理员。错误详情: {str(exc)}"
+        ) from exc
 
     blueprint = Blueprint(**blueprint_data)
     await novel_service.replace_blueprint(project_id, blueprint)
@@ -279,7 +303,8 @@ async def save_blueprint(
             await session.commit()
         logger.info("项目 %s 手动保存蓝图", project_id)
     else:
-        raise HTTPException(status_code=400, detail="缺少蓝图数据")
+        logger.warning("项目 %s 保存蓝图时未提供蓝图数据", project_id)
+        raise HTTPException(status_code=400, detail="缺少蓝图数据，请提供有效的蓝图内容")
 
     return await novel_service.get_project_schema(project_id, current_user.id)
 

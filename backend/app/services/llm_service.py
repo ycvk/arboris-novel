@@ -67,7 +67,8 @@ class LLMService:
             prompt_service = PromptService(self.session)
             system_prompt = await prompt_service.get_prompt("extraction")
         if not system_prompt:
-            raise HTTPException(status_code=500, detail="未配置摘要提示词")
+            logger.error("未配置名为 'extraction' 的摘要提示词，无法生成章节摘要")
+            raise HTTPException(status_code=500, detail="未配置摘要提示词，请联系管理员配置 'extraction' 提示词")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": chapter_content},
@@ -156,19 +157,27 @@ class LLMService:
 
         if finish_reason == "length":
             logger.warning(
-                "LLM response truncated: model=%s user_id=%s",
+                "LLM response truncated: model=%s user_id=%s response_length=%d",
                 config.get("model"),
                 user_id,
+                len(full_response),
             )
-            raise HTTPException(status_code=500, detail="AI 响应被截断，请缩短输入或调整参数")
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI 响应因长度限制被截断（已生成 {len(full_response)} 字符），请缩短输入内容或调整模型参数"
+            )
 
         if not full_response:
             logger.error(
-                "LLM returned empty response: model=%s user_id=%s",
+                "LLM returned empty response: model=%s user_id=%s finish_reason=%s",
                 config.get("model"),
                 user_id,
+                finish_reason,
             )
-            raise HTTPException(status_code=500, detail="AI 未返回有效内容")
+            raise HTTPException(
+                status_code=500,
+                detail=f"AI 未返回有效内容（结束原因: {finish_reason or '未知'}），请稍后重试或联系管理员"
+            )
 
         await self.usage_service.increment("api_request_count")
         logger.info(
@@ -198,7 +207,11 @@ class LLMService:
         model = await self._get_config_value("llm.model")
 
         if not api_key:
-            raise HTTPException(status_code=500, detail="未配置默认 LLM API Key")
+            logger.error("未配置默认 LLM API Key，且用户 %s 未设置自定义 API Key", user_id)
+            raise HTTPException(
+                status_code=500,
+                detail="未配置默认 LLM API Key，请联系管理员配置系统默认 API Key 或在个人设置中配置自定义 API Key"
+            )
 
         return {"api_key": api_key, "base_url": base_url, "model": model}
 
@@ -226,10 +239,12 @@ class LLMService:
             try:
                 response = await client.embeddings(model=target_model, prompt=text)
             except Exception as exc:  # pragma: no cover - 本地服务调用失败
-                logger.warning(
-                    "Ollama 嵌入请求失败: model=%s error=%s",
+                logger.error(
+                    "Ollama 嵌入请求失败: model=%s base_url=%s error=%s",
                     target_model,
+                    base_url,
                     exc,
+                    exc_info=True,
                 )
                 return []
             embedding: Optional[List[float]]
@@ -254,11 +269,13 @@ class LLMService:
                     model=target_model,
                 )
             except Exception as exc:  # pragma: no cover - 网络或鉴权失败
-                logger.warning(
-                    "OpenAI 嵌入请求失败: model=%s user_id=%s error=%s",
+                logger.error(
+                    "OpenAI 嵌入请求失败: model=%s base_url=%s user_id=%s error=%s",
                     target_model,
+                    base_url,
                     user_id,
                     exc,
+                    exc_info=True,
                 )
                 return []
             if not response.data:
