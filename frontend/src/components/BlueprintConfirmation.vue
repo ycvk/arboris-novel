@@ -3,7 +3,10 @@
     <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">信息收集完成！</h2>
 
     <div class="text-center mb-8">
-      <p class="text-lg text-gray-600 mb-4">{{ aiMessage }}</p>
+      <div 
+        class="prose prose-lg prose-gray max-w-none mx-auto mb-4 text-gray-600"
+        v-html="renderedAiMessage"
+      ></div>
       <p class="text-sm text-gray-500">
         我们已经收集了足够的信息来为您创建详细的小说蓝图。点击下方按钮开始生成您的专属故事大纲。
       </p>
@@ -123,14 +126,21 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, inject } from 'vue'
+import { marked } from 'marked'
 import { useNovelStore } from '@/stores/novel'
 import { globalAlert } from '@/composables/useAlert'
+
+// 配置 marked
+marked.setOptions({
+  gfm: true,           // 启用 GitHub 风格语法
+  breaks: true         // 将单个换行视为 <br>
+})
 
 interface Props {
   aiMessage: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
 
 const emit = defineEmits<{
   blueprintGenerated: [response: any]
@@ -145,6 +155,11 @@ const maxTime = 180 // 180秒超时
 
 let progressTimer: NodeJS.Timeout | null = null
 let timeoutTimer: NodeJS.Timeout | null = null
+
+// 渲染 Markdown
+const renderedAiMessage = computed(() => {
+  return marked.parse(props.aiMessage)
+})
 
 // 动态加载文本
 const loadingText = computed(() => {
@@ -289,5 +304,56 @@ onUnmounted(() => {
 /* 禁用状态样式 */
 .disabled\:transform-none:disabled {
   transform: none !important;
+}
+
+/* Markdown 内容样式优化 */
+.prose {
+  text-align: left;
+}
+
+.prose strong {
+  color: #374151;
+  font-weight: 700;
+}
+
+.prose em {
+  color: #4b5563;
+  font-style: italic;
+}
+
+.prose p {
+  margin-bottom: 0.75rem;
+}
+
+.prose p:last-child {
+  margin-bottom: 0;
+}
+
+.prose a {
+  color: #6366f1;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.prose a:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+.prose code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.875em;
+  color: #1f2937;
+}
+
+.prose ul, .prose ol {
+  margin-left: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.prose li {
+  margin-bottom: 0.25rem;
 }
 </style>
