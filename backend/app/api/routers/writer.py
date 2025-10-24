@@ -163,7 +163,8 @@ async def generate_chapter(
 
     writer_prompt = await prompt_service.get_prompt("writing")
     if not writer_prompt:
-        raise HTTPException(status_code=500, detail="缺少写作提示词")
+        logger.error("未配置名为 'writing' 的写作提示词，无法生成章节内容")
+        raise HTTPException(status_code=500, detail="缺少写作提示词，请联系管理员配置 'writing' 提示词")
 
     # 初始化向量检索服务，若未配置则自动降级为纯提示词生成
     vector_store: Optional[VectorStoreService]
@@ -251,8 +252,17 @@ async def generate_chapter(
                 parsed = json.loads(normalized)
                 parsed.setdefault("status", "success")
                 return parsed
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as parse_err:
+                logger.warning(
+                    "项目 %s 第 %s 章第 %s 个版本 JSON 解析失败，将原始内容作为纯文本处理: %s",
+                    project_id,
+                    request.chapter_number,
+                    idx + 1,
+                    parse_err,
+                )
                 return {"content": normalized, "status": "success"}
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.exception(
                 "项目 %s 生成第 %s 章第 %s 个版本时发生异常: %s",
@@ -428,7 +438,7 @@ async def evaluate_chapter(
     evaluator_prompt = await prompt_service.get_prompt("evaluation")
     if not evaluator_prompt:
         logger.error("缺少评估提示词，项目 %s 第 %s 章评估失败", project_id, request.chapter_number)
-        raise HTTPException(status_code=500, detail="缺少评估提示词")
+        raise HTTPException(status_code=500, detail="缺少评估提示词，请联系管理员配置 'evaluation' 提示词")
 
     project_schema = await novel_service._serialize_project(project)
     blueprint_dict = project_schema.blueprint.model_dump()
@@ -482,7 +492,7 @@ async def generate_chapter_outline(
     outline_prompt = await prompt_service.get_prompt("outline")
     if not outline_prompt:
         logger.error("缺少大纲提示词，项目 %s 大纲生成失败", project_id)
-        raise HTTPException(status_code=500, detail="缺少大纲提示词")
+        raise HTTPException(status_code=500, detail="缺少大纲提示词，请联系管理员配置 'outline' 提示词")
 
     project_schema = await novel_service.get_project_schema(project_id, current_user.id)
     blueprint_dict = project_schema.blueprint.model_dump()
@@ -506,7 +516,16 @@ async def generate_chapter_outline(
     try:
         data = json.loads(normalized)
     except json.JSONDecodeError as exc:
-        raise HTTPException(status_code=500, detail="章节大纲生成失败") from exc
+        logger.error(
+            "项目 %s 大纲生成 JSON 解析失败: %s, 原始内容预览: %s",
+            project_id,
+            exc,
+            normalized[:500],
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"章节大纲生成失败，AI 返回的内容格式不正确: {str(exc)}"
+        ) from exc
 
     new_outlines = data.get("chapters", [])
     for item in new_outlines:
@@ -793,8 +812,8 @@ async def delete_chapters(
     current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     if not request.chapter_numbers:
-        logger.warning("项目 %s 未提供要删除的章节号", project_id)
-        raise HTTPException(status_code=400, detail="请提供要删除的章节号")
+        logger.warning("项目 %s 删除章节时未提供章节号", project_id)
+        raise HTTPException(status_code=400, detail="请提供要删除的章节号列表")
     novel_service = NovelService(session)
     llm_service = LLMService(session)
     await novel_service.ensure_project_owner(project_id, current_user.id)

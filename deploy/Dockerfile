@@ -55,12 +55,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制后端应用代码
 COPY backend/ ./
 
+# 清理可能被带入的 SQLite 数据文件，确保首次启动时根据环境变量初始化管理员密码
+RUN rm -rf /app/storage && mkdir -p /app/storage
+
 # 从前端构建阶段复制静态资源到 nginx 默认目录
 COPY --from=frontend-builder /frontend/dist /usr/share/nginx/html
 
 # 复制部署配置
 COPY deploy/nginx.conf /etc/nginx/sites-available/default
 COPY deploy/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY deploy/docker-entrypoint.sh /app/docker-entrypoint.sh
+
+# 允许入口脚本在启动时修正宿主机挂载目录权限
+RUN chmod +x /app/docker-entrypoint.sh
 
 # 创建非 root 用户（供 supervisor 使用）
 RUN useradd -m -u 1000 appuser && \
@@ -71,4 +78,5 @@ EXPOSE 80
 
 # 使用 supervisor 启动 nginx 和 uvicorn
 # 注意：容器以 root 启动，supervisor 会根据配置降权运行各个进程
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
