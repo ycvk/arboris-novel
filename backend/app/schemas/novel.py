@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Literal
 
 from pydantic import BaseModel, Field
 
@@ -34,6 +34,35 @@ class ConverseRequest(BaseModel):
 
     user_input: Dict[str, Any]
     conversation_state: Dict[str, Any]
+
+
+class BlueprintProgress(BaseModel):
+    """概念对话（新协议）：蓝图进度结构。"""
+
+    core_spark: Optional[str] = None
+    genre_tone: Optional[str] = None
+    prose_style: Optional[str] = None
+    protagonist: Optional[str] = None
+    central_conflict: Optional[str] = None
+    antagonist: Optional[str] = None
+    inciting_incident: Optional[str] = None
+    core_theme: Optional[str] = None
+    working_titles: Optional[List[str]] = None
+    target_length: Optional[str] = None
+
+
+class ConverseResponseV2(BaseModel):
+    """概念对话新协议的返回体（与 prompts/concept.md 对齐）。"""
+
+    message: str
+    question_type: Literal["open_ended", "multiple_choice", "confirmation", "complete"]
+    options: Optional[List[str]] = None
+    blueprint_progress: BlueprintProgress
+    completion_percentage: int
+    next_action: Literal["continue", "generate_blueprint"]
+
+
+ 
 
 
 class ChapterGenerationStatus(str, Enum):
@@ -154,6 +183,24 @@ class DeleteChapterRequest(BaseModel):
 class GenerateOutlineRequest(BaseModel):
     start_chapter: int
     num_chapters: int
+
+
+class SplitChapterOutlineRequest(BaseModel):
+    """请求将某一章拆分为多章的大纲生成请求。
+
+    - source_chapter: 需要被拆分的原章节号
+    - target_count: 目标拆分后的章节数量（>=2）
+    - pacing/constraints: 可选的节奏与约束提示
+    - dry_run: 预演（不落库，仅返回预期结果），当前实现保留字段但默认执行落库
+    - rename_strategy: 重编号策略，local 表示局部级联，global 表示全局顺延（预留）
+    """
+
+    source_chapter: int
+    target_count: int
+    pacing: Optional[str] = None
+    constraints: Optional[Dict[str, Any]] = None
+    dry_run: bool = False
+    rename_strategy: Literal["local", "global"] = "local"
 
 
 class BlueprintPatch(BaseModel):

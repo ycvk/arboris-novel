@@ -2,10 +2,10 @@ import json
 import asyncio
 import logging
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
 from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import (
     retry,
@@ -24,6 +24,7 @@ from ...schemas.novel import (
     EvaluateChapterRequest,
     GenerateChapterRequest,
     GenerateOutlineRequest,
+    SplitChapterOutlineRequest,
     NovelProject as NovelProjectSchema,
     SelectVersionRequest,
     UpdateChapterOutlineRequest,
@@ -532,6 +533,213 @@ async def generate_chapter_outline(
             )
     await session.commit()
     logger.info("项目 %s 章节大纲生成完成", project_id)
+
+    return await novel_service.get_project_schema(project_id, current_user.id)
+
+
+@router.post("/novels/{project_id}/chapters/split-outline", response_model=NovelProjectSchema)
+async def split_chapter_outline(
+    project_id: str,
+    request: SplitChapterOutlineRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: UserInDB = Depends(get_current_user),
+) -> NovelProjectSchema:
+    """将某一章的大纲拆分为多章，并进行必要的局部重编号与写入。"""
+    if request.target_count is None or request.target_count < 2:
+        raise HTTPException(status_code=400, detail="目标拆分数量必须大于等于 2")
+
+    novel_service = NovelService(session)
+    prompt_service = PromptService(session)
+    llm_service = LLMService(session)
+
+    await novel_service.ensure_project_owner(project_id, current_user.id)
+
+    # 蓝图上下文
+    project_schema = await novel_service.get_project_schema(project_id, current_user.id)
+    blueprint_dict = project_schema.blueprint.model_dump()
+
+    # 源章节纲要
+    src_stmt = (
+        select(ChapterOutline)
+        .where(
+            ChapterOutline.project_id == project_id,
+            ChapterOutline.chapter_number == request.source_chapter,
+        )
+    )
+    src_result = await session.execute(src_stmt)
+    src_outline = src_result.scalars().first()
+    if not src_outline:
+        raise HTTPException(status_code=404, detail="未找到要拆分的章节纲要")
+
+    subsequent_chapters_stmt = (
+        select(ChapterOutline)
+        .where(
+            ChapterOutline.project_id == project_id,
+            ChapterOutline.chapter_number > request.source_chapter,
+        )
+        .order_by(ChapterOutline.chapter_number)
+        .limit(10)
+    )
+    subsequent_result = await session.execute(subsequent_chapters_stmt)
+    subsequent_outlines = subsequent_result.scalars().all()
+
+    subsequent_constraints = [
+        {
+            "chapter_number": ch.chapter_number,
+            "title": ch.title,
+            "summary": ch.summary,
+        }
+        for ch in subsequent_outlines
+    ]
+
+    payload = {
+        "novel_blueprint": blueprint_dict,
+        "split": {
+            "source_chapter": request.source_chapter,
+            "target_count": request.target_count,
+            "pacing": request.pacing,
+            "constraints": request.constraints or {},
+        },
+        "source_outline": {
+            "chapter_number": src_outline.chapter_number,
+            "title": src_outline.title,
+            "summary": src_outline.summary,
+        },
+        "subsequent_chapters": subsequent_constraints,
+    }
+
+    outline_prompt = await prompt_service.get_prompt("split_outline")
+    if not outline_prompt:
+        raise HTTPException(status_code=500, detail="缺少拆分大纲提示词")
+
+    try:
+        raw = await llm_service.get_llm_response(
+            system_prompt=outline_prompt,
+            conversation_history=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+            temperature=0.6,
+            user_id=current_user.id,
+            timeout=360.0,
+        )
+        normalized = unwrap_markdown_json(remove_think_tags(raw))
+        data = json.loads(normalized)
+    except Exception as exc:
+        logger.exception("章节拆分大纲生成失败: %s", exc)
+        raise HTTPException(status_code=500, detail="章节拆分大纲生成失败")
+
+    parts = data.get("chapters", []) if isinstance(data, dict) else []
+    m = int(request.target_count)
+    if not isinstance(parts, list):
+        parts = []
+    if len(parts) < m:
+        parts.extend([
+            {"title": f"第{request.source_chapter + i}章（拆分）", "summary": "待完善"}
+            for i in range(len(parts), m)
+        ])
+    elif len(parts) > m:
+        parts = parts[:m]
+
+    # 计算需要顺延的章节编号（局部级联）
+    existing_numbers: Set[int] = set()
+    out_rows = (await session.execute(
+        select(ChapterOutline.chapter_number).where(ChapterOutline.project_id == project_id)
+    )).scalars().all()
+    ch_rows = (await session.execute(
+        select(Chapter.chapter_number).where(Chapter.project_id == project_id)
+    )).scalars().all()
+    for n in out_rows:
+        if n is not None:
+            existing_numbers.add(int(n))
+    for n in ch_rows:
+        if n is not None:
+            existing_numbers.add(int(n))
+
+    s = int(request.source_chapter)
+    needed = m - 1
+    to_shift: List[int] = []
+    if needed > 0:
+        free_needed = needed
+        n = s + 1
+        while free_needed > 0:
+            if n in existing_numbers:
+                to_shift.append(n)
+            else:
+                free_needed -= 1
+            n += 1
+
+    OFFSET = 100000
+    if to_shift:
+        # 临时上移，避免冲突
+        await session.execute(
+            update(ChapterOutline)
+            .where(
+                ChapterOutline.project_id == project_id,
+                ChapterOutline.chapter_number.in_(to_shift),
+            )
+            .values(chapter_number=ChapterOutline.chapter_number + OFFSET)
+        )
+        await session.execute(
+            update(Chapter)
+            .where(
+                Chapter.project_id == project_id,
+                Chapter.chapter_number.in_(to_shift),
+            )
+            .values(chapter_number=Chapter.chapter_number + OFFSET)
+        )
+
+        # 调整为目标编号（+needed）
+        await session.execute(
+            update(ChapterOutline)
+            .where(
+                ChapterOutline.project_id == project_id,
+                ChapterOutline.chapter_number.in_([x + OFFSET for x in to_shift]),
+            )
+            .values(chapter_number=ChapterOutline.chapter_number - (OFFSET - needed))
+        )
+        await session.execute(
+            update(Chapter)
+            .where(
+                Chapter.project_id == project_id,
+                Chapter.chapter_number.in_([x + OFFSET for x in to_shift]),
+            )
+            .values(chapter_number=Chapter.chapter_number - (OFFSET - needed))
+        )
+
+    # 写入/更新拆分后的大纲
+    for idx in range(m):
+        target_number = s + idx
+        item = parts[idx] or {}
+        title = str(item.get("title") or f"第{target_number}章")
+        summary = str(item.get("summary") or "")
+
+        stmt = (
+            select(ChapterOutline)
+            .where(
+                ChapterOutline.project_id == project_id,
+                ChapterOutline.chapter_number == target_number,
+            )
+        )
+        result = await session.execute(stmt)
+        record = result.scalars().first()
+        if record:
+            record.title = title
+            record.summary = summary
+        else:
+            session.add(
+                ChapterOutline(
+                    project_id=project_id,
+                    chapter_number=target_number,
+                    title=title,
+                    summary=summary,
+                )
+            )
+
+    await session.commit()
+    logger.info(
+        "项目 %s 第 %s 章已拆分为 %s 章，并完成局部重编号",
+        project_id,
+        s,
+        m,
+    )
 
     return await novel_service.get_project_schema(project_id, current_user.id)
 
