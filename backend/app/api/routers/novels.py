@@ -1,6 +1,7 @@
 import json
 import logging
 from typing import Dict, List
+from pydantic import ValidationError
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,7 +14,7 @@ from ...schemas.novel import (
     BlueprintPatch,
     Chapter as ChapterSchema,
     ConverseRequest,
-    ConverseResponse,
+    ConverseResponseV2,
     NovelProject as NovelProjectSchema,
     NovelProjectSummary,
     NovelSectionResponse,
@@ -25,27 +26,69 @@ from ...services.novel_service import NovelService
 from ...services.prompt_service import PromptService
 from ...utils.json_utils import remove_think_tags, unwrap_markdown_json
 
+
+def _as_list_str(val) -> List[str]:
+    if not val:
+        return []
+    if isinstance(val, list):
+        out: List[str] = []
+        for x in val:
+            if isinstance(x, str):
+                out.append(x)
+            elif isinstance(x, dict):
+                label = x.get("label")
+                if isinstance(label, str):
+                    out.append(label)
+        return out
+    return []
+
+
+def _normalize_concept_payload(parsed: dict, prev_state: dict | None = None) -> dict:
+    """严格校验并规范为新协议结构（仅接受新协议）。"""
+    if isinstance(parsed, dict):
+        # 新协议直通
+        required = {"message", "question_type", "blueprint_progress", "completion_percentage", "next_action"}
+        if required.issubset(parsed.keys()):
+            # 确保 options 为字符串数组或 null
+            opts = parsed.get("options")
+            if opts is not None:
+                parsed["options"] = _as_list_str(opts) or None
+            return parsed
+
+    # 无效/用户回声等：直接视为协议不符
+    raise ValueError("concept response does not conform to expected schema")
+
+
+def _preview_text(text: str, limit: int = 1200) -> str:
+    try:
+        if not isinstance(text, str):
+            text = str(text)
+    except Exception:
+        return "<unprintable>"
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...<truncated>"
+
+
+def _preview_history(messages: List[Dict[str, str]], max_items: int = 8, content_limit: int = 400) -> List[Dict[str, str]]:
+    if not isinstance(messages, list):
+        return []
+    tail = messages[-max_items:]
+    out: List[Dict[str, str]] = []
+    for m in tail:
+        role = m.get("role", "")
+        content = m.get("content", "")
+        if not isinstance(content, str):
+            try:
+                content = str(content)
+            except Exception:
+                content = "<unprintable>"
+        out.append({"role": role, "content": _preview_text(content, content_limit)})
+    return out
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/novels", tags=["Novels"])
-
-JSON_RESPONSE_INSTRUCTION = """
-IMPORTANT: 你的回复必须是合法的 JSON 对象，并严格包含以下字段：
-{
-  "ai_message": "string",
-  "ui_control": {
-    "type": "single_choice | text_input | info_display",
-    "options": [
-      {"id": "option_1", "label": "string"}
-    ],
-    "placeholder": "string"
-  },
-  "conversation_state": {},
-  "is_complete": false
-}
-不要输出额外的文本或解释。
-"""
-
 
 def _ensure_prompt(prompt: str | None, name: str) -> str:
     if not prompt:
@@ -126,13 +169,13 @@ async def delete_novels(
     return {"status": "success", "message": f"成功删除 {len(project_ids)} 个项目"}
 
 
-@router.post("/{project_id}/concept/converse", response_model=ConverseResponse)
+@router.post("/{project_id}/concept/converse", response_model=ConverseResponseV2)
 async def converse_with_concept(
     project_id: str,
     request: ConverseRequest,
     session: AsyncSession = Depends(get_session),
     current_user: UserInDB = Depends(get_current_user),
-) -> ConverseResponse:
+) -> ConverseResponseV2:
     """与概念设计师（LLM）进行对话，引导蓝图筹备。"""
     novel_service = NovelService(session)
     prompt_service = PromptService(session)
@@ -155,19 +198,34 @@ async def converse_with_concept(
     conversation_history.append({"role": "user", "content": user_content})
 
     system_prompt = _ensure_prompt(await prompt_service.get_prompt("concept"), "concept")
-    system_prompt = f"{system_prompt}\n{JSON_RESPONSE_INSTRUCTION}"
+
+    # 关键日志：打印传入 LLM 的 prompt 与对话内容（做长度截断）
+    logger.info(
+        "Concept LLM request: prompt_len=%s prompt_preview=%s",
+        len(system_prompt or ""),
+        _preview_text(system_prompt or "", 800),
+    )
+    logger.info(
+        "Concept LLM request: history_total=%s history_preview=%s",
+        len(conversation_history),
+        _preview_history(conversation_history, 8, 300),
+    )
 
     llm_response = await llm_service.get_llm_response(
         system_prompt=system_prompt,
         conversation_history=conversation_history,
         temperature=0.8,
         user_id=current_user.id,
-        timeout=240.0,
+        timeout=300.0,
     )
+    # 关键日志：打印 LLM 原始返回（截断）
+    logger.info("Concept LLM raw_response: %s", _preview_text(llm_response, 1200))
     llm_response = remove_think_tags(llm_response)
 
     try:
         normalized = unwrap_markdown_json(llm_response)
+        # 关键日志：打印归一化后的 JSON 字符串（截断）
+        logger.info("Concept LLM normalized: %s", _preview_text(normalized, 1200))
         parsed = json.loads(normalized)
     except json.JSONDecodeError as exc:
         logger.exception(
@@ -178,16 +236,142 @@ async def converse_with_concept(
         )
         raise HTTPException(status_code=500, detail="AI 返回内容不是有效的 JSON") from exc
 
+    # 规范化为新协议结构（严格校验，仅接受新协议）
+    try:
+        normalized_dict = _normalize_concept_payload(parsed, request.conversation_state)
+    except ValueError as exc:
+        logger.error(
+            "Concept response not conforming: project_id=%s user_id=%s payload_preview=%s",
+            project_id,
+            current_user.id,
+            _preview_text(normalized, 800),
+        )
+        raise HTTPException(status_code=500, detail="AI 返回内容不符合协议，请重试") from exc
+    assistant_json = json.dumps(normalized_dict, ensure_ascii=False)
+
     await novel_service.append_conversation(project_id, "user", user_content)
-    await novel_service.append_conversation(project_id, "assistant", normalized)
+    await novel_service.append_conversation(project_id, "assistant", assistant_json)
 
-    logger.info("项目 %s 概念对话完成，is_complete=%s", project_id, parsed.get("is_complete"))
+    logger.info(
+        "项目 %s 概念对话完成，completion=%s next_action=%s",
+        project_id,
+        normalized_dict.get("completion_percentage"),
+        normalized_dict.get("next_action"),
+    )
 
-    if parsed.get("is_complete"):
-        parsed["ready_for_blueprint"] = True
+    try:
+        return ConverseResponseV2(**normalized_dict)
+    except ValidationError as exc:
+        logger.exception(
+            "Invalid concept response schema: project_id=%s user_id=%s payload=%s",
+            project_id,
+            current_user.id,
+            normalized_dict,
+        )
+        raise HTTPException(status_code=500, detail="AI 返回内容结构不符合协议") from exc
 
-    parsed.setdefault("conversation_state", parsed.get("conversation_state", {}))
-    return ConverseResponse(**parsed)
+
+@router.post("/{project_id}/concept/regenerate", response_model=ConverseResponseV2)
+async def regenerate_concept_reply(
+    project_id: str,
+    session: AsyncSession = Depends(get_session),
+    current_user: UserInDB = Depends(get_current_user),
+) -> ConverseResponseV2:
+    """重新生成上一次 AI 回复：删除最后一条 assistant 消息后，基于相同历史重试。"""
+    novel_service = NovelService(session)
+    prompt_service = PromptService(session)
+    llm_service = LLMService(session)
+
+    await novel_service.ensure_project_owner(project_id, current_user.id)
+
+    # 构造新的历史（移除最后一条 assistant）
+    history_records = await novel_service.list_conversations(project_id)
+    if not history_records:
+        raise HTTPException(status_code=400, detail="暂无可重试的对话")
+    # 确保存在可删除的 assistant
+    last_assistant = None
+    for record in reversed(history_records):
+        if record.role == "assistant":
+            last_assistant = record
+            break
+    if not last_assistant:
+        raise HTTPException(status_code=400, detail="当前无可重试的 AI 回复")
+
+    # 生成用于 LLM 的历史：去掉最后一个 assistant
+    trimmed_records = []
+    removed_once = False
+    for record in reversed(history_records):
+        if not removed_once and record.role == "assistant":
+            removed_once = True
+            continue
+        trimmed_records.append(record)
+    trimmed_records.reverse()
+
+    conversation_history = [{"role": r.role, "content": r.content} for r in trimmed_records]
+    system_prompt = _ensure_prompt(await prompt_service.get_prompt("concept"), "concept")
+
+    logger.info(
+        "Concept Regenerate request: history_total=%s history_preview=%s",
+        len(conversation_history),
+        _preview_history(conversation_history, 8, 300),
+    )
+
+    llm_response = await llm_service.get_llm_response(
+        system_prompt=system_prompt,
+        conversation_history=conversation_history,
+        temperature=0.8,
+        user_id=current_user.id,
+        timeout=300.0,
+    )
+    logger.info("Concept Regenerate raw_response: %s", _preview_text(llm_response, 1200))
+    llm_response = remove_think_tags(llm_response)
+
+    try:
+        normalized = unwrap_markdown_json(llm_response)
+        logger.info("Concept Regenerate normalized: %s", _preview_text(normalized, 1200))
+        parsed = json.loads(normalized)
+    except json.JSONDecodeError as exc:
+        logger.exception(
+            "Failed to parse concept regenerate response: project_id=%s user_id=%s normalized=%s",
+            project_id,
+            current_user.id,
+            normalized,
+        )
+        raise HTTPException(status_code=500, detail="AI 返回内容不是有效的 JSON") from exc
+
+    try:
+        normalized_dict = _normalize_concept_payload(parsed, None)
+    except ValueError as exc:
+        logger.error(
+            "Concept regenerate not conforming: project_id=%s user_id=%s payload_preview=%s",
+            project_id,
+            current_user.id,
+            _preview_text(normalized, 800),
+        )
+        raise HTTPException(status_code=500, detail="AI 返回内容不符合协议，请重试") from exc
+
+    # 用新的 assistant 回复替换最后一条 assistant
+    await novel_service.pop_last_conversation(project_id, role="assistant")
+    assistant_json = json.dumps(normalized_dict, ensure_ascii=False)
+    await novel_service.append_conversation(project_id, "assistant", assistant_json)
+
+    logger.info(
+        "项目 %s 概念对话重试完成，completion=%s next_action=%s",
+        project_id,
+        normalized_dict.get("completion_percentage"),
+        normalized_dict.get("next_action"),
+    )
+
+    try:
+        return ConverseResponseV2(**normalized_dict)
+    except ValidationError as exc:
+        logger.exception(
+            "Invalid concept regenerate schema: project_id=%s user_id=%s payload=%s",
+            project_id,
+            current_user.id,
+            normalized_dict,
+        )
+        raise HTTPException(status_code=500, detail="AI 返回内容结构不符合协议") from exc
 
 
 @router.post("/{project_id}/blueprint/generate", response_model=BlueprintGenerationResponse)
@@ -222,9 +406,9 @@ async def generate_blueprint(
                 if isinstance(user_value, str):
                     formatted_history.append({"role": "user", "content": user_value})
             elif role == "assistant":
-                ai_message = data.get("ai_message") if isinstance(data, dict) else None
-                if ai_message:
-                    formatted_history.append({"role": "assistant", "content": ai_message})
+                message_v2 = data.get("message") if isinstance(data, dict) else None
+                if isinstance(message_v2, str) and message_v2:
+                    formatted_history.append({"role": "assistant", "content": message_v2})
         except (json.JSONDecodeError, AttributeError):
             continue
 

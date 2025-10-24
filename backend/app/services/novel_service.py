@@ -237,6 +237,22 @@ class NovelService:
         await self.session.commit()
         await self._touch_project(project_id)
 
+    async def pop_last_conversation(self, project_id: str, role: Optional[str] = None) -> bool:
+        """删除最后一条对话记录（可选按角色过滤）。返回是否删除成功。"""
+        stmt = (
+            select(NovelConversation)
+            .where(NovelConversation.project_id == project_id)
+            .order_by(NovelConversation.seq.desc())
+        )
+        result = await self.session.execute(stmt)
+        for convo in result.scalars():
+            if role is None or (convo.role == role):
+                await self.session.delete(convo)
+                await self.session.commit()
+                await self._touch_project(project_id)
+                return True
+        return False
+
     # ------------------------------------------------------------------
     # 蓝图管理
     # ------------------------------------------------------------------

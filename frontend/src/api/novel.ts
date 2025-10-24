@@ -105,12 +105,26 @@ export interface ConversationMessage {
   content: string
 }
 
+export interface BlueprintProgress {
+  core_spark: string | null
+  genre_tone: string | null
+  prose_style: string | null
+  protagonist: string | null
+  central_conflict: string | null
+  antagonist: string | null
+  inciting_incident: string | null
+  core_theme: string | null
+  working_titles: string[] | null
+  target_length: string | null
+}
+
 export interface ConverseResponse {
-  ai_message: string
-  ui_control: UIControl
-  conversation_state: any
-  is_complete: boolean
-  ready_for_blueprint?: boolean  // 新增：表示准备生成蓝图
+  message: string
+  question_type: 'open_ended' | 'multiple_choice' | 'confirmation' | 'complete'
+  options: string[] | null
+  blueprint_progress: BlueprintProgress
+  completion_percentage: number
+  next_action: 'continue' | 'generate_blueprint'
 }
 
 export interface BlueprintGenerationResponse {
@@ -180,6 +194,12 @@ export class NovelAPI {
         user_input: formattedUserInput,
         conversation_state: conversationState
       })
+    })
+  }
+
+  static async regenerateConcept(projectId: string): Promise<ConverseResponse> {
+    return request(`${NOVELS_BASE}/${projectId}/concept/regenerate`, {
+      method: 'POST'
     })
   }
 
@@ -265,6 +285,24 @@ export class NovelAPI {
       body: JSON.stringify({
         start_chapter: startChapter,
         num_chapters: numChapters
+      })
+    })
+  }
+
+  static async splitChapterOutline(
+    projectId: string,
+    sourceChapter: number,
+    targetCount: number,
+    pacing?: string,
+    constraints?: Record<string, any>
+  ): Promise<NovelProject> {
+    return request(`${WRITER_BASE}/${projectId}/chapters/split-outline`, {
+      method: 'POST',
+      body: JSON.stringify({
+        source_chapter: sourceChapter,
+        target_count: targetCount,
+        pacing,
+        constraints
       })
     })
   }

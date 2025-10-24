@@ -147,6 +147,7 @@
                 :class="componentContainerClass"
                 @edit="handleSectionEdit"
                 @add="startAddChapter"
+                @refresh="reloadSection('chapter_outline', true)"
               />
             </div>
           </div>
