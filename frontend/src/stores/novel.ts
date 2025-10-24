@@ -97,10 +97,29 @@ export const useNovelStore = defineStore('novel', () => {
         userInput,
         currentConversationState.value
       )
-      currentConversationState.value = response.conversation_state
+      // 使用新协议的蓝图进度作为会话状态在前端保存
+      currentConversationState.value = response.blueprint_progress
       return response
     } catch (err) {
       error.value = err instanceof Error ? err.message : '对话失败'
+      throw err
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function regenerateConversation(): Promise<ConverseResponse> {
+    isLoading.value = true
+    error.value = null
+    try {
+      if (!currentProject.value) {
+        throw new Error('没有当前项目')
+      }
+      const response = await NovelAPI.regenerateConcept(currentProject.value.id)
+      currentConversationState.value = response.blueprint_progress
+      return response
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : '重试失败'
       throw err
     } finally {
       isLoading.value = false
@@ -307,6 +326,7 @@ export const useNovelStore = defineStore('novel', () => {
     loadChapter,
     sendConversation,
     generateBlueprint,
+    regenerateConversation,
     saveBlueprint,
     generateChapter,
     evaluateChapter,

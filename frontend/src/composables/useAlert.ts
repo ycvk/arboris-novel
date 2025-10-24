@@ -64,6 +64,10 @@ const showSuccess = (message: string, title: string = '成功') => {
   return showAlert(message, 'success', title);
 };
 
+const showInfo = (message: string, title: string = '提示') => {
+  return showAlert(message, 'info', title);
+};
+
 const showError = (message: string, title: string = '错误') => {
   return showAlert(message, 'error', title);
 };
@@ -77,6 +81,7 @@ export const globalAlert = {
   showAlert,
   closeAlert,
   showSuccess,
+  showInfo,
   showError,
   showConfirm,
 }

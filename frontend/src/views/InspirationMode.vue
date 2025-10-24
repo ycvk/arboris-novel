@@ -51,6 +51,17 @@
                 </svg>
               </button>
               <button
+                @click="handleRegenerate"
+                :title="novelStore.isLoading ? '正在生成…' : '重新生成本轮回复'"
+                :disabled="novelStore.isLoading || isInitialLoading"
+                class="text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12a9 9 0 1 1-9-9"/>
+                  <path d="M22 2 12 12"/>
+                </svg>
+              </button>
+              <button
                 @click="exitConversation"
                 title="返回首页"
                 class="text-gray-400 hover:text-gray-600 transition-colors"
@@ -117,7 +128,7 @@
 import { ref, nextTick, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
-import type { UIControl, Blueprint } from '@/api/novel'
+import type { UIControl, Blueprint, ConverseResponse } from '@/api/novel'
 import ChatBubble from '@/components/ChatBubble.vue'
 import ConversationInput from '@/components/ConversationInput.vue'
 import BlueprintConfirmation from '@/components/BlueprintConfirmation.vue'
@@ -222,7 +233,8 @@ const restoreConversation = async (projectId: string) => {
         } else { // assistant
           try {
             const assistantOutput = JSON.parse(item.content)
-            return { content: assistantOutput.ai_message, type: 'ai' }
+            const msg = assistantOutput.message || assistantOutput.ai_message || item.content
+            return { content: msg, type: 'ai' }
           } catch {
             return { content: item.content, type: 'ai' }
           }
@@ -231,15 +243,16 @@ const restoreConversation = async (projectId: string) => {
 
       const lastAssistantMsgStr = project.conversation_history.filter(m => m.role === 'assistant').pop()?.content
       if (lastAssistantMsgStr) {
-        const lastAssistantMsg = JSON.parse(lastAssistantMsgStr)
-        
-        if (lastAssistantMsg.is_complete) {
-          // 如果对话已完成，直接显示蓝图确认界面
-          confirmationMessage.value = lastAssistantMsg.ai_message
+        const lastAssistantMsg: ConverseResponse = JSON.parse(lastAssistantMsgStr)
+        const shouldGenerate =
+          lastAssistantMsg?.next_action === 'generate_blueprint' ||
+          lastAssistantMsg?.question_type === 'complete'
+
+        if (shouldGenerate) {
+          confirmationMessage.value = lastAssistantMsg.message || ''
           showBlueprintConfirmation.value = true
         } else {
-          // 否则，恢复对话
-          currentUIControl.value = lastAssistantMsg.ui_control
+          currentUIControl.value = toUIControl(lastAssistantMsg)
         }
       }
       // 计算当前轮次
@@ -273,23 +286,22 @@ const handleUserInput = async (userInput: any) => {
 
     // 添加AI回复到聊天记录
     chatMessages.value.push({
-      content: response.ai_message,
+      content: response.message,
       type: 'ai'
     })
     currentTurn.value++
 
     await scrollToBottom()
 
-    if (response.is_complete && response.ready_for_blueprint) {
-      // 对话完成，显示蓝图确认界面
-      confirmationMessage.value = response.ai_message
+    const shouldGenerate =
+      response.next_action === 'generate_blueprint' ||
+      response.question_type === 'complete'
+
+    if (shouldGenerate) {
+      confirmationMessage.value = response.message
       showBlueprintConfirmation.value = true
-    } else if (response.is_complete) {
-      // 向后兼容：直接生成蓝图（如果后端还没更新）
-      await handleGenerateBlueprint()
     } else {
-      // 继续对话
-      currentUIControl.value = response.ui_control
+      currentUIControl.value = toUIControl(response)
     }
   } catch (error) {
     console.error('对话失败:', error)
@@ -301,6 +313,59 @@ const handleUserInput = async (userInput: any) => {
     // 停止加载并返回初始界面
     resetInspirationMode()
   }
+}
+
+const handleRegenerate = async () => {
+  try {
+    // 找到最后一条 AI 气泡
+    let lastAiIdx = -1
+    for (let i = chatMessages.value.length - 1; i >= 0; i--) {
+      if (chatMessages.value[i].type === 'ai') { lastAiIdx = i; break }
+    }
+    if (lastAiIdx === -1) {
+      await globalAlert.showInfo('当前没有可重试的 AI 回复。', '提示')
+      return
+    }
+    const response = await novelStore.regenerateConversation()
+    // 替换最后一条 AI 内容
+    chatMessages.value[lastAiIdx] = { content: response.message, type: 'ai' }
+
+    const shouldGenerate =
+      response.next_action === 'generate_blueprint' ||
+      response.question_type === 'complete'
+
+    if (shouldGenerate) {
+      confirmationMessage.value = response.message
+      showBlueprintConfirmation.value = true
+    } else {
+      currentUIControl.value = toUIControl(response)
+    }
+    await scrollToBottom()
+  } catch (error) {
+    console.error('重新生成失败:', error)
+    globalAlert.showError(`重新生成失败: ${error instanceof Error ? error.message : '未知错误'}`, '重试失败')
+  }
+}
+
+// 将新协议的对话响应转换为前端 UI 控件模型
+function toUIControl(resp: ConverseResponse | any): UIControl | null {
+  const qtype = resp?.question_type
+  if (qtype === 'open_ended') {
+    return { type: 'text_input', placeholder: '请输入你的想法…' }
+  }
+  if (qtype === 'multiple_choice' || qtype === 'confirmation') {
+    const opts: string[] | null = resp?.options ?? null
+    if (!opts || !Array.isArray(opts) || opts.length === 0) {
+      // 回退为文本输入
+      return { type: 'text_input', placeholder: '请输入你的想法…' }
+    }
+    return {
+      type: 'single_choice',
+      options: opts.map((label: string, idx: number) => ({ id: `option_${idx + 1}`, label }))
+    }
+  }
+  // complete 或未知情形默认不再需要输入
+  return null
 }
 
 const handleGenerateBlueprint = async () => {
