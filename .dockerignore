@@ -61,6 +61,7 @@ backend/*.egg-info/
 backend/.pytest_cache/
 backend/db/*.db
 backend/*.sqlite3
+backend/storage/
 
 # Docker
 docker-compose*.yml
@@ -83,6 +84,9 @@ temp/
 *.tmp
 *.bak
 *.swp
+
+# Local runtime artifacts
+storage/
 
 # OS
 Thumbs.db

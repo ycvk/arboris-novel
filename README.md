@@ -1,8 +1,14 @@
-# Arboris | 给写小说的人，一个有意思的写作空间
+# Arboris-Novel  | 给写小说的人，一个有意思的写作空间
 
-凌晨两点，你盯着屏幕上闪烁的光标，脑子里有个模糊的想法：一个关于时间旅行者的故事。但当你试图把它写下来时，却发现自己卡在了「主角叫什么名字」「故事发生在哪里」「第三章该写什么」这些问题上。
+![GitHub stars](https://img.shields.io/github/stars/t59688/arboris-novel?style=social)
+![GitHub forks](https://img.shields.io/github/forks/t59688/arboris-novel?style=social)
+![GitHub issues](https://img.shields.io/github/issues/t59688/arboris-novel)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-你不是没有才华，只是有时候，一个人扛着整个宇宙太累了。
+
+
+
+你盯着屏幕上闪烁的光标，脑子里有个模糊的想法：一个有意思的故事。但当你试图把它写下来时，却发现自己卡在了「主角叫什么名字」「故事发生在哪里」「第三章该写什么」这些问题上。
 
 **Arboris** 就是在这种时候出现的——它不会替你写作（那样多没意思），但它会在你需要的时候，帮你理清思路、记住细节、提供几个「要不试试这个方向」的建议。
 
@@ -135,6 +141,8 @@ DB_PROVIDER=mysql docker compose --env-file deploy/.env -f deploy/docker-compose
 
 ## 一些常见问题
 
+### 基础使用
+
 **Q: 我不会 Docker 怎么办？**  
 A: 装一下 Docker Desktop（Windows/Mac）或者 Docker Engine（Linux），然后复制粘贴上面的命令就行。真的不难。
 
@@ -145,7 +153,59 @@ A: 不会。密钥存在服务器的 `.env` 文件里，不会暴露给前端或
 A: 只要提供 OpenAI 兼容接口，都可以。改一下 `OPENAI_API_BASE_URL` 就行。
 
 **Q: 我改了代码怎么办？**  
-A: 欢迎！提 PR 或者 Issue 都行。。
+A: 欢迎！提 PR 或者 Issue 都行。
+
+### 生成小说时的常见错误
+
+**Q: 提示"未配置默认 LLM API Key"怎么办？**  
+A: 检查 `.env` 文件中的 `OPENAI_API_KEY` 是否正确配置。如果是个人用户，也可以在个人设置中配置自定义 API Key。
+
+**Q: 生成时提示"今日请求次数已达上限"？**  
+A: 系统管理员可能设置了每日请求限制。解决方案：
+- 等到明天再试
+- 在个人设置中配置自己的 API Key（不受系统配额限制）
+- 管理员调整配额限制（修改 `daily_request_limit` 配置）
+
+**Q: 提示"AI 服务响应超时"或"无法连接到 AI 服务"？**  
+A: 网络或 API 服务问题导致。可以：
+- 检查网络连接是否正常
+- 确认 `OPENAI_API_BASE_URL` 配置是否正确
+- 如果使用自建服务，检查服务是否正常运行
+- 稍后重试
+
+**Q: 提示"AI 响应因长度限制被截断"？**  
+A: 生成的内容超过了模型的输出限制。建议：
+- 使用支持更长输出的模型
+
+**Q: 提示"AI 未返回有效内容"或"AI 服务内部错误"？**  
+A: AI 服务端出现问题。通常是暂时性的，可以：
+- 大多是LLM服务的问题，尤其是逆向的API。
+- 检查 API Key 是否有效且有足够余额
+- 查看后端日志获取详细错误信息
+
+**Q: 提示"蓝图中未找到对应章节纲要"？**  
+A: 在生成章节内容前，需要先在蓝图（大纲）中创建对应章节的纲要。请先完善章节大纲再进行生成。
+
+**Q: 提示"未配置摘要提示词"？**  
+A: 系统缺少必要的 Prompt 配置。管理员需要在后台配置名为 `extraction` 的提示词模板，用于生成章节摘要。
+
+**Q: 提示"AI 返回的内容格式不正确"或 JSON 解析错误？** ⭐ **非常常见**  
+A: 这是最常见的问题之一。AI 返回的内容无法被解析为有效的 JSON 格式。原因和解决方案：
+- **原因 1：模型能力不足** - 某些模型难以稳定输出结构化 JSON
+  - 解决：切换到能力更强的模型
+  - 或使用支持 structured output 的模型
+- **原因 2：内容过长** - 某些逆向API可能无法支持长输出。
+
+- **临时解决方案：**
+  - 多试几次（有时是偶发问题）
+  - 更换不同的 AI 模型
+
+**Q: 生成的内容质量不理想怎么办？**  
+A: 可以尝试：
+- 完善角色、地点、派系等设定信息
+- 优化章节纲要，提供更详细的指引
+- 使用多版本生成功能，让 AI 生成多个版本后挑选最佳的
+- 调整使用的模型，需要长上下文的
 
 ---
 
@@ -221,14 +281,18 @@ docker compose -f deploy/docker-compose.yml up -d --build
 
 ---
 
-## 开源协议
-
-MIT License —— 你可以免费用、改、商用，只需保留版权声明。
-
----
-
 ## 最后说两句
 
 如果你用 Arboris 写出了什么有趣的东西，记得告诉我们。  
 
 祝你写作顺利，故事精彩。
+
+
+
+
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+[![Star History Chart](https://api.star-history.com/svg?repos=t59688/arboris-novel&type=Date)](https://star-history.com/#t59688/arboris-novel&Date)
