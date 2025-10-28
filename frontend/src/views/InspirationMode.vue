@@ -35,7 +35,7 @@
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
               </span>
-              <span class="text-sm font-medium text-indigo-600">与“文思”对话中...</span>
+              <span class="text-sm font-medium text-indigo-600">与"文思"对话中...</span>
             </div>
             <div class="flex items-center gap-4">
               <span v-if="currentTurn > 0" class="text-sm font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-md">
@@ -48,17 +48,6 @@
               >
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path>
-                </svg>
-              </button>
-              <button
-                @click="handleRegenerate"
-                :title="novelStore.isLoading ? '正在生成…' : '重新生成本轮回复'"
-                :disabled="novelStore.isLoading || isInitialLoading"
-                class="text-gray-400 hover:text-indigo-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21 12a9 9 0 1 1-9-9"/>
-                  <path d="M22 2 12 12"/>
                 </svg>
               </button>
               <button
@@ -99,7 +88,10 @@
           <ConversationInput
             :ui-control="currentUIControl"
             :loading="novelStore.isLoading"
+            :show-regenerate-button="shouldShowRegenerateButton"
+            :is-regenerate-disabled="novelStore.isLoading || isInitialLoading"
             @submit="handleUserInput"
+            @regenerate="handleRegenerate"
           />
         </div>
       </div>
@@ -125,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import type { UIControl, Blueprint, ConverseResponse } from '@/api/novel'
@@ -156,6 +148,13 @@ const completedBlueprint = ref<Blueprint | null>(null)
 const confirmationMessage = ref('')
 const blueprintMessage = ref('')
 const chatArea = ref<HTMLElement>()
+
+const shouldShowRegenerateButton = computed(() => {
+  if (isInitialLoading.value) return false
+
+  const hasAiMessage = chatMessages.value.some(msg => msg.type === 'ai')
+  return hasAiMessage
+})
 
 const goBack = () => {
   router.push('/')

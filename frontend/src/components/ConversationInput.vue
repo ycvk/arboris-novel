@@ -26,13 +26,26 @@
       <form @submit.prevent="handleTextSubmit" class="flex items-center gap-3">
         <textarea
           v-model="textInput"
-          :placeholder="isManualInput ? '请输入您的想法...' : '选择上方选项或点击“我要输入”'"
+          :placeholder="isManualInput ? '请输入您的想法...' : '选择上方选项或点击「我要输入」'"
           class="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 outline-none transition-all disabled:bg-gray-100 resize-none overflow-y-auto leading-relaxed"
           :disabled="!isManualInput"
           rows="5"
           ref="textInputRef"
           @input="handleTextareaInput"
         ></textarea>
+        <button
+          v-if="props.showRegenerateButton"
+          type="button"
+          @click="handleRegenerateClick"
+          :disabled="props.isRegenerateDisabled"
+          :title="props.isRegenerateDisabled ? '正在生成…' : '重新生成上一条AI回复'"
+          class="flex-shrink-0 w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center hover:bg-gray-500 transition-all shadow-md disabled:bg-gray-300 disabled:cursor-not-allowed"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 text-white" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-9-9"/>
+            <path d="M22 2 12 12"/>
+          </svg>
+        </button>
         <button
           type="submit"
           class="flex-shrink-0 w-12 h-12 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-all shadow-md disabled:bg-gray-300"
@@ -69,6 +82,19 @@
         @input="handleTextareaInput"
       ></textarea>
       <button
+        v-if="props.showRegenerateButton"
+        type="button"
+        @click="handleRegenerateClick"
+        :disabled="props.isRegenerateDisabled"
+        :title="props.isRegenerateDisabled ? '正在生成…' : '重新生成上一条AI回复'"
+        class="flex-shrink-0 w-12 h-12 bg-gray-400 rounded-full flex items-center justify-center hover:bg-gray-500 transition-all shadow-md disabled:bg-gray-300 disabled:cursor-not-allowed"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="h-6 w-6 text-white" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-9-9"/>
+          <path d="M22 2 12 12"/>
+        </svg>
+      </button>
+      <button
         type="submit"
         class="flex-shrink-0 w-12 h-12 bg-indigo-500 rounded-full flex items-center justify-center hover:bg-indigo-600 transition-all shadow-md"
       >
@@ -99,11 +125,15 @@ import type { UIControl } from '@/api/novel'
 interface Props {
   uiControl: UIControl | null
   loading: boolean
+  showRegenerateButton?: boolean
+  isRegenerateDisabled?: boolean
 }
 
 const props = defineProps<Props>()
+
 const emit = defineEmits<{
   submit: [userInput: { id: string; value: string } | null]
+  regenerate: []
 }>()
 
 const textInput = ref('')
@@ -145,6 +175,10 @@ const handleTextSubmit = () => {
     textInput.value = ''
     nextTick(() => adjustTextareaHeight())
   }
+}
+
+const handleRegenerateClick = () => {
+  emit('regenerate')
 }
 
 // 当输入控件变为文本输入时，自动聚焦
