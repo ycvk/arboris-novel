@@ -68,6 +68,7 @@
 import { ref, computed } from 'vue'
 import { globalAlert } from '@/composables/useAlert'
 import type { Blueprint } from '@/api/novel'
+import { formatTextWithLineBreaks } from '@/utils/text-formatter'
 
 interface DisplayField {
   label: string;
@@ -464,7 +465,7 @@ const formattedBlueprint = computed(() => {
     </div>
     <div class="prose max-w-none">
       <h4 class="font-semibold text-gray-800 mb-3">完整简介</h4>
-      <p class="text-gray-700 leading-relaxed">${safe(blueprint.full_synopsis)}</p>
+      <p class="text-gray-700 leading-relaxed whitespace-pre-line">${formatTextWithLineBreaks(safe(blueprint.full_synopsis))}</p>
     </div>
     `,
     icons.summary

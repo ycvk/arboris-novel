@@ -113,6 +113,7 @@ import { useRouter } from 'vue-router'
 import { useNovelStore } from '@/stores/novel'
 import type { Chapter, ChapterOutline, ChapterGenerationResponse, ChapterVersion } from '@/api/novel'
 import { globalAlert } from '@/composables/useAlert'
+import { cleanVersionContent } from '@/utils/text-formatter'
 import Tooltip from '@/components/Tooltip.vue'
 import WDHeader from '@/components/writing-desk/WDHeader.vue'
 import WDSidebar from '@/components/writing-desk/WDSidebar.vue'
@@ -198,32 +199,6 @@ const isCurrentVersion = (versionIndex: number) => {
   const cleanVersionContentStr = cleanVersionContent(availableVersions.value[versionIndex].content)
 
   return cleanCurrentContent === cleanVersionContentStr
-}
-
-const cleanVersionContent = (content: string): string => {
-  if (!content) return ''
-
-  // 尝试解析JSON，看是否是完整的章节对象
-  try {
-    const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object' && parsed.content) {
-      // 如果是章节对象，提取content字段
-      content = parsed.content
-    }
-  } catch (error) {
-    // 如果不是JSON，继续处理字符串
-  }
-
-  // 去掉开头和结尾的引号
-  let cleaned = content.replace(/^"|"$/g, '')
-
-  // 处理转义字符
-  cleaned = cleaned.replace(/\\n/g, '\n')  // 换行符
-  cleaned = cleaned.replace(/\\"/g, '"')   // 引号
-  cleaned = cleaned.replace(/\\t/g, '\t')  // 制表符
-  cleaned = cleaned.replace(/\\\\/g, '\\') // 反斜杠
-
-  return cleaned
 }
 
 const canGenerateChapter = (chapterNumber: number) => {

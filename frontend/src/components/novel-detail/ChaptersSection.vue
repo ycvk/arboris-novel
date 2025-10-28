@@ -391,7 +391,7 @@
           <div class="overflow-y-auto p-6 max-h-[calc(85vh-5rem)]">
             <div class="prose prose-slate max-w-none">
               <div class="text-base text-slate-900 leading-8 whitespace-pre-wrap font-serif">
-                {{ versionModal.content }}
+                {{ cleanVersionContent(versionModal.content) }}
               </div>
             </div>
           </div>
@@ -407,6 +407,7 @@ import { NovelAPI } from '@/api/novel'
 import { AdminAPI } from '@/api/admin'
 import { useRoute } from 'vue-router'
 import { marked } from 'marked'
+import { cleanVersionContent } from '@/utils/text-formatter'
 
 interface ChapterItem {
   chapter_number: number

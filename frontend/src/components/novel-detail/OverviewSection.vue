@@ -54,7 +54,7 @@
         </button>
       </div>
       <div class="prose prose-sm max-w-none text-slate-600 leading-7 whitespace-pre-line">
-        <p>{{ data?.full_synopsis || '暂无' }}</p>
+        <p>{{ formatTextWithLineBreaks(data?.full_synopsis || '') || '暂无' }}</p>
       </div>
     </div>
   </div>
@@ -62,6 +62,7 @@
 
 <script setup lang="ts">
 import { defineEmits, defineProps } from 'vue'
+import { formatTextWithLineBreaks } from '@/utils/text-formatter'
 
 interface OverviewData {
   one_sentence_summary?: string | null

@@ -132,6 +132,7 @@
 <script setup lang="ts">
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { globalAlert } from '@/composables/useAlert'
+import { cleanVersionContent } from '@/utils/text-formatter'
 import type { Chapter, ChapterOutline, ChapterGenerationResponse, ChapterVersion, NovelProject } from '@/api/novel'
 import WorkspaceInitial from './workspace/WorkspaceInitial.vue'
 import ChapterGenerating from './workspace/ChapterGenerating.vue'
@@ -179,25 +180,6 @@ const confirmRegenerateChapter = async () => {
 const showEditModal = ref(false)
 const editingContent = ref('')
 const isSaving = ref(false)
-
-// 清理版本内容的辅助函数
-const cleanVersionContent = (content: string): string => {
-  if (!content) return ''
-  try {
-    const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object' && parsed.content) {
-      content = parsed.content
-    }
-  } catch (error) {
-    // not a json
-  }
-  let cleaned = content.replace(/^"|"$/g, '')
-  cleaned = cleaned.replace(/\\n/g, '\n')
-  cleaned = cleaned.replace(/\\"/g, '"')
-  cleaned = cleaned.replace(/\\t/g, '\t')
-  cleaned = cleaned.replace(/\\\\/g, '\\')
-  return cleaned
-}
 
 const openEditModal = () => {
   if (selectedChapter.value?.content) {

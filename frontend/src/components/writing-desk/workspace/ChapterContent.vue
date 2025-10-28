@@ -51,6 +51,7 @@
 </template>
 
 <script setup lang="ts">
+import { cleanVersionContent } from '@/utils/text-formatter'
 import type { Chapter } from '@/api/novel'
 
 interface Props {
@@ -60,24 +61,6 @@ interface Props {
 defineProps<Props>()
 
 defineEmits(['showVersionSelector'])
-
-const cleanVersionContent = (content: string): string => {
-  if (!content) return ''
-  try {
-    const parsed = JSON.parse(content)
-    if (parsed && typeof parsed === 'object' && parsed.content) {
-      content = parsed.content
-    }
-  } catch (error) {
-    // not a json
-  }
-  let cleaned = content.replace(/^"|"$/g, '')
-  cleaned = cleaned.replace(/\\n/g, '\n')
-  cleaned = cleaned.replace(/\\"/g, '"')
-  cleaned = cleaned.replace(/\\t/g, '\t')
-  cleaned = cleaned.replace(/\\\\/g, '\\')
-  return cleaned
-}
 
 const sanitizeFileName = (name: string): string => {
   return name.replace(/[\\/:*?"<>|]/g, '_')

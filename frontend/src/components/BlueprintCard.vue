@@ -60,7 +60,7 @@
       <div v-if="showDetails" class="space-y-4 pt-4 border-t">
         <div v-if="blueprint.full_synopsis">
           <h4 class="font-medium text-gray-600 mb-2">完整简介</h4>
-          <p class="text-gray-800 text-sm leading-relaxed">{{ blueprint.full_synopsis }}</p>
+          <p class="text-gray-800 text-sm leading-relaxed whitespace-pre-line">{{ formatTextWithLineBreaks(blueprint.full_synopsis) }}</p>
         </div>
       </div>
     </div>
@@ -70,6 +70,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Blueprint } from '@/api/novel'
+import { formatTextWithLineBreaks } from '@/utils/text-formatter'
 
 interface Props {
   blueprint: Blueprint | undefined
