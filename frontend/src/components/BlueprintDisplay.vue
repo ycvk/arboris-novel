@@ -296,7 +296,28 @@ const formattedBlueprint = computed(() => {
 
     let html = ''
 
-    if (worldSetting.core_rules) {
+    // Format core_rules array (new structure)
+    if (worldSetting.core_rules && Array.isArray(worldSetting.core_rules)) {
+      html += `
+        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
+          <h4 class="font-semibold text-amber-800 mb-3 flex items-center">
+            <svg class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+            核心设定
+          </h4>
+          <div class="space-y-3">
+            ${worldSetting.core_rules.map((rule: any, idx: number) => `
+              <div class="bg-white/70 rounded-lg p-3 border-l-4 border-amber-400">
+                <div class="font-medium text-amber-900 mb-2">规则 ${idx + 1}</div>
+                ${rule.rule_content ? `<div class="text-amber-800 mb-2"><strong>内容：</strong>${rule.rule_content}</div>` : ''}
+                ${rule.impact_on_protagonist ? `<div class="text-amber-700 text-sm mb-1"><strong>对主角影响：</strong>${rule.impact_on_protagonist}</div>` : ''}
+                ${rule.conflict_potential ? `<div class="text-amber-700 text-sm"><strong>潜在冲突：</strong>${rule.conflict_potential}</div>` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `
+    } else if (typeof worldSetting.core_rules === 'string') {
+      // Backward compatibility for old string format
       html += `
         <div class="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-4">
           <h4 class="font-semibold text-amber-800 mb-2 flex items-center">
@@ -308,6 +329,7 @@ const formattedBlueprint = computed(() => {
       `
     }
 
+    // Format key_locations array (new structure)
     if (worldSetting.key_locations && worldSetting.key_locations.length > 0) {
       html += `
         <div class="mb-4">
@@ -316,17 +338,36 @@ const formattedBlueprint = computed(() => {
             关键地点
           </h4>
           <div class="grid gap-3">
-            ${worldSetting.key_locations.map((loc: any) => `
-              <div class="bg-teal-50 border-l-3 border-teal-400 p-3 rounded-r-lg">
-                <h5 class="font-medium text-teal-800">${loc.name}</h5>
-                <p class="text-teal-700 text-sm mt-1">${loc.description}</p>
-              </div>
-            `).join('')}
+            ${worldSetting.key_locations.map((loc: any, idx: number) => {
+              // New structure with detailed fields
+              if (loc.visual_description || loc.functional_role) {
+                return `
+                  <div class="bg-teal-50 border-l-4 border-teal-400 p-3 rounded-r-lg">
+                    <h5 class="font-medium text-teal-800 mb-2">${loc.name || `地点 ${idx + 1}`}</h5>
+                    ${loc.visual_description ? `<div class="text-teal-700 text-sm mb-1"><strong>视觉描述：</strong>${loc.visual_description}</div>` : ''}
+                    ${loc.functional_role ? `<div class="text-teal-700 text-sm mb-1"><strong>功能定位：</strong>${loc.functional_role}</div>` : ''}
+                    ${loc.emotional_tone ? `<div class="text-teal-700 text-sm mb-1"><strong>情感基调：</strong>${loc.emotional_tone}</div>` : ''}
+                    ${loc.plot_usage ? `<div class="text-teal-700 text-sm"><strong>剧情作用：</strong>${loc.plot_usage}</div>` : ''}
+                  </div>
+                `
+              }
+              // Old structure with name and description
+              else if (loc.name || loc.description) {
+                return `
+                  <div class="bg-teal-50 border-l-3 border-teal-400 p-3 rounded-r-lg">
+                    <h5 class="font-medium text-teal-800">${loc.name || `地点 ${idx + 1}`}</h5>
+                    <p class="text-teal-700 text-sm mt-1">${loc.description || ''}</p>
+                  </div>
+                `
+              }
+              return ''
+            }).join('')}
           </div>
         </div>
       `
     }
 
+    // Format factions array (new structure)
     if (worldSetting.factions && worldSetting.factions.length > 0) {
       html += `
         <div>
@@ -335,12 +376,30 @@ const formattedBlueprint = computed(() => {
             主要势力
           </h4>
           <div class="grid gap-3">
-            ${worldSetting.factions.map((fac: any) => `
-              <div class="bg-purple-50 border-l-3 border-purple-400 p-3 rounded-r-lg">
-                <h5 class="font-medium text-purple-800">${fac.name}</h5>
-                <p class="text-purple-700 text-sm mt-1">${fac.description}</p>
-              </div>
-            `).join('')}
+            ${worldSetting.factions.map((fac: any, idx: number) => {
+              // New structure with detailed fields
+              if (fac.core_interest || fac.power_level) {
+                return `
+                  <div class="bg-purple-50 border-l-4 border-purple-400 p-3 rounded-r-lg">
+                    <h5 class="font-medium text-purple-800 mb-2">${fac.name || `势力 ${idx + 1}`}</h5>
+                    ${fac.core_interest ? `<div class="text-purple-700 text-sm mb-1"><strong>核心利益：</strong>${fac.core_interest}</div>` : ''}
+                    ${fac.power_level ? `<div class="text-purple-700 text-sm mb-1"><strong>实力层级：</strong>${fac.power_level}</div>` : ''}
+                    ${fac.representative ? `<div class="text-purple-700 text-sm mb-1"><strong>代表人物：</strong>${fac.representative}</div>` : ''}
+                    ${fac.relation_to_protagonist ? `<div class="text-purple-700 text-sm"><strong>与主角关系：</strong>${fac.relation_to_protagonist}</div>` : ''}
+                  </div>
+                `
+              }
+              // Old structure with name and description
+              else if (fac.name || fac.description) {
+                return `
+                  <div class="bg-purple-50 border-l-3 border-purple-400 p-3 rounded-r-lg">
+                    <h5 class="font-medium text-purple-800">${fac.name || `势力 ${idx + 1}`}</h5>
+                    <p class="text-purple-700 text-sm mt-1">${fac.description || ''}</p>
+                  </div>
+                `
+              }
+              return ''
+            }).join('')}
           </div>
         </div>
       `

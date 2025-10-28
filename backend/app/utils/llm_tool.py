@@ -38,6 +38,9 @@ class LLMClient:
         timeout: int = 120,
         **kwargs,
     ) -> AsyncGenerator[Dict[str, str], None]:
+        import logging
+        logger = logging.getLogger(__name__)
+
         payload = {
             "model": model or os.environ.get("MODEL", "gpt-3.5-turbo"),
             "messages": [msg.to_dict() for msg in messages],
@@ -47,6 +50,7 @@ class LLMClient:
         }
         if response_format:
             payload["response_format"] = {"type": response_format}
+            logger.info(f"Using response_format: {payload['response_format']}")
         if temperature is not None:
             payload["temperature"] = temperature
         if top_p is not None:

@@ -13,36 +13,36 @@
     </div>
 
     <!-- 高级加载状态 -->
-    <div v-if="isGenerating" class="text-center py-12">
+    <div v-if="sseState.isGenerating" class="text-center py-12">
       <!-- 主加载动画 -->
       <div class="relative mx-auto mb-8 w-24 h-24">
         <!-- 外圆环 -->
         <div
           class="absolute inset-0 border-4 rounded-full transition-colors duration-500"
-          :class="progress >= 100 ? 'border-green-100' : 'border-indigo-100'"
+          :class="sseState.progress >= 100 ? 'border-green-100' : 'border-indigo-100'"
         ></div>
         <!-- 旋转的渐变圆环 -->
         <div
           class="absolute inset-0 border-4 border-transparent rounded-full transition-colors duration-500"
           :class="[
-            progress >= 100
+            sseState.progress >= 100
               ? 'border-t-green-500 border-r-green-400'
               : 'border-t-indigo-500 border-r-indigo-400',
-            progress < 100 ? 'animate-spin' : ''
+            sseState.progress < 100 ? 'animate-spin' : ''
           ]"
         ></div>
         <!-- 内部脉冲圆 -->
         <div
           class="absolute inset-3 rounded-full animate-pulse opacity-20 transition-colors duration-500"
-          :class="progress >= 100 ? 'bg-green-500' : 'bg-indigo-500'"
+          :class="sseState.progress >= 100 ? 'bg-green-500' : 'bg-indigo-500'"
         ></div>
         <!-- 中心图标 -->
         <div
           class="absolute inset-6 rounded-full flex items-center justify-center transition-colors duration-500"
-          :class="progress >= 100 ? 'bg-green-500' : 'bg-indigo-500'"
+          :class="sseState.progress >= 100 ? 'bg-green-500' : 'bg-indigo-500'"
         >
           <svg
-            v-if="progress >= 100"
+            v-if="sseState.progress >= 100"
             class="w-6 h-6 text-white"
             fill="currentColor"
             viewBox="0 0 20 20"
@@ -69,13 +69,13 @@
         <div class="w-full max-w-md mx-auto">
           <!-- <div class="flex justify-between text-xs text-gray-500 mb-2">
             <span>生成进度</span>
-            <span>{{ Math.round(progress) }}%</span>
+            <span>{{ Math.round(sseState.progress) }}%</span>
           </div> -->
           <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
             <div
               class="h-2 rounded-full transition-all duration-1000 ease-out relative"
-              :class="progress >= 100 ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-indigo-500 to-purple-600'"
-              :style="{ width: `${progress}%` }"
+              :class="sseState.progress >= 100 ? 'bg-gradient-to-r from-green-500 to-emerald-600' : 'bg-gradient-to-r from-indigo-500 to-purple-600'"
+              :style="{ width: `${sseState.progress}%` }"
             >
               <!-- 闪光效果 -->
               <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-shimmer"></div>
@@ -110,7 +110,7 @@
       </button> -->
       <button
         @click="generateBlueprint"
-        :disabled="isGenerating"
+        :disabled="sseState.isGenerating"
         class="bg-gradient-to-r from-indigo-500 to-purple-600 text-white font-bold py-3 px-8 rounded-full hover:from-indigo-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
       >
         <span class="flex items-center justify-center">
@@ -129,11 +129,11 @@ import { ref, computed, onUnmounted, inject } from 'vue'
 import { marked } from 'marked'
 import { useNovelStore } from '@/stores/novel'
 import { globalAlert } from '@/composables/useAlert'
+import { useBlueprintSSE } from '@/composables/useBlueprintSSE'
 
-// 配置 marked
 marked.setOptions({
-  gfm: true,           // 启用 GitHub 风格语法
-  breaks: true         // 将单个换行视为 <br>
+  gfm: true,
+  breaks: true
 })
 
 interface Props {
@@ -148,117 +148,55 @@ const emit = defineEmits<{
 }>()
 
 const novelStore = useNovelStore()
-const isGenerating = ref(false)
-const progress = ref(0)
-const timeElapsed = ref(0)
-const maxTime = 180 // 180秒超时
+const { state: sseState, startGeneration, cleanup: cleanupSSE } = useBlueprintSSE()
 
-let progressTimer: NodeJS.Timeout | null = null
-let timeoutTimer: NodeJS.Timeout | null = null
-
-// 渲染 Markdown
 const renderedAiMessage = computed(() => {
   return marked.parse(props.aiMessage)
 })
 
-// 动态加载文本
 const loadingText = computed(() => {
-  if (progress.value >= 100) {
+  if (sseState.progress >= 100) {
     return '生成完成！正在准备展示...'
   }
-
-  const messages = [
-    '正在分析故事结构...',
-    '构建角色关系网络...',
-    '生成情节发展脉络...',
-    '完善世界观设定...',
-    '优化章节安排...',
-    '最后润色细节...'
-  ]
-
-  const index = Math.floor((progress.value / 100) * messages.length)
-  return messages[Math.min(index, messages.length - 1)]
+  return sseState.statusMessage || '正在准备生成...'
 })
 
-// 剩余时间计算
 const timeRemaining = computed(() => {
-  return Math.max(0, maxTime - timeElapsed.value)
+  const totalTime = 300
+  const elapsed = (sseState.progress / 100) * totalTime
+  return Math.max(0, totalTime - elapsed)
 })
 
 const generateBlueprint = async () => {
-  isGenerating.value = true
-  progress.value = 0
-  timeElapsed.value = 0
-
-  // 启动进度条动画
-  progressTimer = setInterval(() => {
-    timeElapsed.value += 0.1
-
-    // 非线性进度增长，前面快后面慢
-    const normalizedTime = timeElapsed.value / maxTime
-    if (normalizedTime < 0.7) {
-      // 前70%时间内进度到80%
-      progress.value = Math.min(80, (normalizedTime / 0.7) * 80)
-    } else {
-      // 后30%时间内从80%到95%
-      const remainingProgress = (normalizedTime - 0.7) / 0.3
-      progress.value = Math.min(95, 80 + remainingProgress * 15)
-    }
-  }, 100)
-
-  // 60秒超时
-  timeoutTimer = setTimeout(() => {
-    clearTimers()
-    isGenerating.value = false
-    globalAlert.showError('生成超时，请稍后重试。如果问题持续，请检查网络连接。', '生成超时')
-  }, maxTime * 1000)
+  if (!novelStore.currentProject) {
+    globalAlert.showError('当前项目不存在', '错误')
+    return
+  }
 
   try {
-    // 直接调用store中的API
-    console.log('开始调用generateBlueprint API...')
-    const response = await novelStore.generateBlueprint()
-    console.log('API调用成功，收到响应:', response)
+    console.log('开始SSE生成蓝图，项目ID:', novelStore.currentProject.id)
+    const blueprint = await startGeneration(novelStore.currentProject.id)
+    console.log('SSE生成完成，收到蓝图:', blueprint)
 
-    // API成功后，快速完成进度条到100%
-    if (progressTimer) {
-      clearInterval(progressTimer)
-      progressTimer = null
-    }
-
-    // 动画到100%并显示完成状态
-    progress.value = 100
-
-    // 等待一下让用户看到100%完成状态，然后再切换界面
     await new Promise(resolve => setTimeout(resolve, 800))
 
-    // 清理并重置状态
-    clearTimers()
-    isGenerating.value = false
-
-    // 通知父组件生成完成
-    emit('blueprintGenerated', response)
+    emit('blueprintGenerated', {
+      success: true,
+      blueprint: blueprint,
+      ai_message: '蓝图生成完成！'
+    })
 
   } catch (error) {
     console.error('生成蓝图失败:', error)
-    clearTimers()
-    isGenerating.value = false
-    globalAlert.showError(`生成蓝图失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
-  }
-}
-
-const clearTimers = () => {
-  if (progressTimer) {
-    clearInterval(progressTimer)
-    progressTimer = null
-  }
-  if (timeoutTimer) {
-    clearTimeout(timeoutTimer)
-    timeoutTimer = null
+    globalAlert.showError(
+      `生成蓝图失败: ${error instanceof Error ? error.message : '未知错误'}`,
+      '生成失败'
+    )
   }
 }
 
 onUnmounted(() => {
-  clearTimers()
+  cleanupSSE()
 })
 </script>
 
