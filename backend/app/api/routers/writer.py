@@ -1,10 +1,10 @@
-import json
 import asyncio
+import json
 import logging
 import os
 from typing import Dict, List, Optional, Set
 
-from fastapi import APIRouter, Body, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from tenacity import (
@@ -18,6 +18,7 @@ from ...core.config import settings
 from ...core.dependencies import get_current_user
 from ...db.session import get_session, AsyncSessionLocal
 from ...models.novel import Chapter, ChapterOutline
+from ...repositories.system_config_repository import SystemConfigRepository
 from ...schemas.novel import (
     DeleteChapterRequest,
     EditChapterRequest,
@@ -37,7 +38,6 @@ from ...services.novel_service import NovelService
 from ...services.prompt_service import PromptService
 from ...services.vector_store_service import VectorStoreService
 from ...utils.json_utils import remove_think_tags, unwrap_markdown_json
-from ...repositories.system_config_repository import SystemConfigRepository
 
 router = APIRouter(prefix="/api/writer", tags=["Writer"])
 logger = logging.getLogger(__name__)
@@ -59,11 +59,11 @@ def _extract_tail_excerpt(text: Optional[str], limit: int = 500) -> str:
 
 @router.post("/novels/{project_id}/chapters/generate", response_model=NovelProjectSchema)
 async def generate_chapter(
-    project_id: str,
-    request: GenerateChapterRequest,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: GenerateChapterRequest,
+        background_tasks: BackgroundTasks,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     prompt_service = PromptService(session)
@@ -100,7 +100,8 @@ async def generate_chapter(
             completed_chapters.append(
                 {
                     "chapter_number": existing.chapter_number,
-                    "title": outlines_map.get(existing.chapter_number).title if outlines_map.get(existing.chapter_number) else f"第{existing.chapter_number}章",
+                    "title": outlines_map.get(existing.chapter_number).title if outlines_map.get(
+                        existing.chapter_number) else f"第{existing.chapter_number}章",
                     "summary": existing.real_summary,
                 }
             )
@@ -224,7 +225,7 @@ async def generate_chapter(
             f"标题：{outline_title}\n摘要：{outline_summary}\n写作要求：{writing_notes}",
         ),
     ]
-    prompt_input = "\n\n".join(f"{title}\n{content}" for title, content in prompt_sections if content)
+    prompt_input = "\n".join(f"{title}\n{content}" for title, content in prompt_sections if content)
     logger.debug("章节写作提示词：%s\n%s", writer_prompt, prompt_input)
 
     @retry(
@@ -242,7 +243,7 @@ async def generate_chapter(
                 response = await local_llm_service.get_llm_response(
                     system_prompt=writer_prompt,
                     conversation_history=[{"role": "user", "content": prompt_input}],
-                    temperature=0.9,
+                    temperature=0.7,
                     user_id=current_user.id,
                     timeout=600.0,
                 )
@@ -334,11 +335,11 @@ async def _resolve_version_count(session: AsyncSession) -> int:
 
 @router.post("/novels/{project_id}/chapters/select", response_model=NovelProjectSchema)
 async def select_chapter_version(
-    project_id: str,
-    request: SelectVersionRequest,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: SelectVersionRequest,
+        background_tasks: BackgroundTasks,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     llm_service = LLMService(session)
@@ -390,14 +391,17 @@ async def select_chapter_version(
                             return
                         novel_service_local = NovelService(bg_session)
                         project_local = await novel_service_local.get_project(project_id_)
-                        outline_local = next((item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
+                        outline_local = next(
+                            (item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
                         chapter_title_local = outline_local.title if outline_local and outline_local.title else f"第{chapter_number_}章"
-                        stmt = select(Chapter).where(Chapter.project_id == project_id_, Chapter.chapter_number == chapter_number_)
+                        stmt = select(Chapter).where(Chapter.project_id == project_id_,
+                                                     Chapter.chapter_number == chapter_number_)
                         result = await bg_session.execute(stmt)
                         chapter_local = result.scalars().first()
                         if not chapter_local or not chapter_local.selected_version or not chapter_local.selected_version.content:
                             return
-                        ingestion_service = ChapterIngestionService(llm_service=bg_llm_service, vector_store=vector_store_local)
+                        ingestion_service = ChapterIngestionService(llm_service=bg_llm_service,
+                                                                    vector_store=vector_store_local)
                         await ingestion_service.ingest_chapter(
                             project_id=project_id_,
                             chapter_number=chapter_number_,
@@ -410,17 +414,18 @@ async def select_chapter_version(
                 except Exception as exc:
                     logger.exception("项目 %s 第 %s 章向量入库失败: %s", project_id_, chapter_number_, exc)
 
-            background_tasks.add_task(ingest_chapter_background_task, project_id, chapter.chapter_number, current_user.id)
+            background_tasks.add_task(ingest_chapter_background_task, project_id, chapter.chapter_number,
+                                      current_user.id)
 
     return await _load_project_schema(novel_service, project_id, current_user.id)
 
 
 @router.post("/novels/{project_id}/chapters/evaluate", response_model=NovelProjectSchema)
 async def evaluate_chapter(
-    project_id: str,
-    request: EvaluateChapterRequest,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: EvaluateChapterRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     prompt_service = PromptService(session)
@@ -472,10 +477,10 @@ async def evaluate_chapter(
 
 @router.post("/novels/{project_id}/chapters/outline", response_model=NovelProjectSchema)
 async def generate_chapter_outline(
-    project_id: str,
-    request: GenerateOutlineRequest,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: GenerateOutlineRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     prompt_service = PromptService(session)
@@ -558,10 +563,10 @@ async def generate_chapter_outline(
 
 @router.post("/novels/{project_id}/chapters/split-outline", response_model=NovelProjectSchema)
 async def split_chapter_outline(
-    project_id: str,
-    request: SplitChapterOutlineRequest,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: SplitChapterOutlineRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     """将某一章的大纲拆分为多章，并进行必要的局部重编号与写入。"""
     if request.target_count is None or request.target_count < 2:
@@ -765,10 +770,10 @@ async def split_chapter_outline(
 
 @router.post("/novels/{project_id}/chapters/update-outline", response_model=NovelProjectSchema)
 async def update_chapter_outline(
-    project_id: str,
-    request: UpdateChapterOutlineRequest,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: UpdateChapterOutlineRequest,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     await novel_service.ensure_project_owner(project_id, current_user.id)
@@ -805,11 +810,11 @@ async def update_chapter_outline(
 
 @router.post("/novels/{project_id}/chapters/delete", response_model=NovelProjectSchema)
 async def delete_chapters(
-    project_id: str,
-    request: DeleteChapterRequest,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: DeleteChapterRequest,
+        background_tasks: BackgroundTasks,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     if not request.chapter_numbers:
         logger.warning("项目 %s 删除章节时未提供章节号", project_id)
@@ -855,11 +860,11 @@ async def delete_chapters(
 
 @router.post("/novels/{project_id}/chapters/edit", response_model=NovelProjectSchema)
 async def edit_chapter(
-    project_id: str,
-    request: EditChapterRequest,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_session),
-    current_user: UserInDB = Depends(get_current_user),
+        project_id: str,
+        request: EditChapterRequest,
+        background_tasks: BackgroundTasks,
+        session: AsyncSession = Depends(get_session),
+        current_user: UserInDB = Depends(get_current_user),
 ) -> NovelProjectSchema:
     novel_service = NovelService(session)
     llm_service = LLMService(session)
@@ -908,14 +913,17 @@ async def edit_chapter(
                     # 取最新章节与标题
                     novel_service_local = NovelService(bg_session)
                     project_local = await novel_service_local.get_project(project_id_)
-                    outline_local = next((item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
+                    outline_local = next(
+                        (item for item in project_local.outlines if item.chapter_number == chapter_number_), None)
                     chapter_title_local = outline_local.title if outline_local and outline_local.title else f"第{chapter_number_}章"
-                    stmt = select(Chapter).where(Chapter.project_id == project_id_, Chapter.chapter_number == chapter_number_)
+                    stmt = select(Chapter).where(Chapter.project_id == project_id_,
+                                                 Chapter.chapter_number == chapter_number_)
                     result = await bg_session.execute(stmt)
                     chapter_local = result.scalars().first()
                     if not chapter_local or not chapter_local.selected_version or not chapter_local.selected_version.content:
                         return
-                    ingestion_service = ChapterIngestionService(llm_service=bg_llm_service, vector_store=vector_store_local)
+                    ingestion_service = ChapterIngestionService(llm_service=bg_llm_service,
+                                                                vector_store=vector_store_local)
                     await ingestion_service.ingest_chapter(
                         project_id=project_id_,
                         chapter_number=chapter_number_,
