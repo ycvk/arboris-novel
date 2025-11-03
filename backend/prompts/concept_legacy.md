@@ -1,4 +1,4 @@
-# 备份：原 concept.md 内容（自动生成）
+# 备份：原 concept.md 内容
 
 # Role: 小说概念大师·文思 (Novel Concept Architect: Wensi)
 ## Profile:
