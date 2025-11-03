@@ -327,4 +327,97 @@ export class NovelAPI {
       })
     })
   }
+
+  // ==================== 分阶段蓝图生成 ====================
+
+  static async generateStage1(projectId: string): Promise<StageGenerationResponse> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/generate-stage/1`, {
+      method: 'POST'
+    })
+  }
+
+  static async generateStage2(
+    projectId: string,
+    stage1Data: Record<string, any>
+  ): Promise<StageGenerationResponse> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/generate-stage/2`, {
+      method: 'POST',
+      body: JSON.stringify({ stage1_data: stage1Data })
+    })
+  }
+
+  static async generateStage3(
+    projectId: string,
+    stage1Data: Record<string, any>,
+    stage2Data: Record<string, any>
+  ): Promise<StageGenerationResponse> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/generate-stage/3`, {
+      method: 'POST',
+      body: JSON.stringify({ stage1_data: stage1Data, stage2_data: stage2Data })
+    })
+  }
+
+  static async saveDraft(projectId: string, draftData: BlueprintDraft): Promise<{ success: boolean }> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/draft`, {
+      method: 'POST',
+      body: JSON.stringify(draftData)
+    })
+  }
+
+  static async getDraft(projectId: string): Promise<DraftResponse> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/draft`, {
+      method: 'GET'
+    })
+  }
+
+  static async deleteDraft(projectId: string): Promise<{ success: boolean }> {
+    return request(`${API_BASE_URL}${API_PREFIX}/blueprint/${projectId}/draft`, {
+      method: 'DELETE'
+    })
+  }
+}
+
+// ==================== 分阶段蓝图类型定义 ====================
+
+export interface Stage1Data {
+  title: string
+  genre: string
+  tone: string
+  target_audience?: string
+  style?: string
+  one_sentence_summary: string
+}
+
+export interface Stage2Data {
+  full_synopsis: string
+  world_setting: Record<string, any>
+}
+
+export interface Stage3Data {
+  characters: Array<Record<string, any>>
+  relationships: Array<Record<string, any>>
+}
+
+export interface Stage4Data {
+  chapter_outline: Array<Record<string, any>>
+}
+
+export interface BlueprintDraft {
+  current_stage: number
+  stage1?: Stage1Data
+  stage2?: Stage2Data
+  stage3?: Stage3Data
+  stage4?: Stage4Data
+}
+
+export interface StageGenerationResponse {
+  stage: number
+  data: Record<string, any>
+  next_stage?: number
+  ai_message?: string
+}
+
+export interface DraftResponse {
+  exists: boolean
+  draft?: BlueprintDraft
 }

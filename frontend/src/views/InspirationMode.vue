@@ -24,7 +24,7 @@
 
       <!-- 灵感模式交互界面 -->
       <div
-        v-else-if="!showBlueprintConfirmation && !showBlueprint"
+        v-else-if="!showBlueprintWizard"
         class="h-[90vh] max-h-[950px] flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden fade-in"
       >
         <!-- 头部 -->
@@ -96,21 +96,11 @@
         </div>
       </div>
 
-      <!-- 蓝图确认界面 -->
-      <BlueprintConfirmation
-        v-if="showBlueprintConfirmation"
-        :ai-message="confirmationMessage"
-        @blueprint-generated="handleBlueprintGenerated"
-        @back="backToConversation"
-      />
-
-      <!-- 大纲展示界面 -->
-      <BlueprintDisplay
-        v-if="showBlueprint"
-        :blueprint="completedBlueprint"
-        :ai-message="blueprintMessage"
-        @confirm="handleConfirmBlueprint"
-        @regenerate="handleRegenerateBlueprint"
+      <!-- 蓝图向导界面 -->
+      <BlueprintWizard
+        v-if="showBlueprintWizard && novelStore.currentProject"
+        :project-id="novelStore.currentProject.id"
+        @complete="handleBlueprintComplete"
       />
     </div>
   </div>
@@ -123,8 +113,7 @@ import { useNovelStore } from '@/stores/novel'
 import type { UIControl, Blueprint, ConverseResponse } from '@/api/novel'
 import ChatBubble from '@/components/ChatBubble.vue'
 import ConversationInput from '@/components/ConversationInput.vue'
-import BlueprintConfirmation from '@/components/BlueprintConfirmation.vue'
-import BlueprintDisplay from '@/components/BlueprintDisplay.vue'
+import BlueprintWizard from '@/components/blueprint/BlueprintWizard.vue'
 import InspirationLoading from '@/components/InspirationLoading.vue'
 import { globalAlert } from '@/composables/useAlert'
 
@@ -139,14 +128,10 @@ const novelStore = useNovelStore()
 
 const conversationStarted = ref(false)
 const isInitialLoading = ref(false)
-const showBlueprintConfirmation = ref(false)
-const showBlueprint = ref(false)
+const showBlueprintWizard = ref(false)
 const chatMessages = ref<ChatMessage[]>([])
 const currentUIControl = ref<UIControl | null>(null)
 const currentTurn = ref(0)
-const completedBlueprint = ref<Blueprint | null>(null)
-const confirmationMessage = ref('')
-const blueprintMessage = ref('')
 const chatArea = ref<HTMLElement>()
 
 const shouldShowRegenerateButton = computed(() => {
@@ -164,15 +149,11 @@ const goBack = () => {
 const resetInspirationMode = () => {
   conversationStarted.value = false
   isInitialLoading.value = false
-  showBlueprintConfirmation.value = false
-  showBlueprint.value = false
+  showBlueprintWizard.value = false
   chatMessages.value = []
   currentUIControl.value = null
   currentTurn.value = 0
-  completedBlueprint.value = null
-  confirmationMessage.value = ''
-  blueprintMessage.value = ''
-  
+
   // 清空 store 中的当前项目和对话状态
   novelStore.setCurrentProject(null)
   novelStore.currentConversationState = {}
@@ -194,7 +175,7 @@ const handleRestart = async () => {
 }
 
 const backToConversation = () => {
-  showBlueprintConfirmation.value = false
+  showBlueprintWizard.value = false
 }
 
 const startConversation = async () => {
@@ -219,6 +200,7 @@ const restoreConversation = async (projectId: string) => {
   try {
     await novelStore.loadProject(projectId)
     const project = novelStore.currentProject
+
     if (project && project.conversation_history) {
       conversationStarted.value = true
       chatMessages.value = project.conversation_history.map((item): ChatMessage | null => {
@@ -248,8 +230,8 @@ const restoreConversation = async (projectId: string) => {
           lastAssistantMsg?.question_type === 'complete'
 
         if (shouldGenerate) {
-          confirmationMessage.value = lastAssistantMsg.message || ''
-          showBlueprintConfirmation.value = true
+          // 显示蓝图向导
+          showBlueprintWizard.value = true
         } else {
           currentUIControl.value = toUIControl(lastAssistantMsg)
         }
@@ -257,11 +239,18 @@ const restoreConversation = async (projectId: string) => {
       // 计算当前轮次
       currentTurn.value = project.conversation_history.filter(m => m.role === 'assistant').length
       await scrollToBottom()
+    } else {
+      console.warn('[InspirationMode] 项目不存在或没有对话历史')
+      // 如果项目不存在或没有对话历史，重置到初始状态
+      resetInspirationMode()
+      router.push('/inspiration')
     }
   } catch (error) {
-    console.error('恢复对话失败:', error)
+    console.error('[InspirationMode] 恢复对话失败:', error)
     globalAlert.showError(`无法恢复对话: ${error instanceof Error ? error.message : '未知错误'}`, '加载失败')
     resetInspirationMode()
+    // 移除 URL 中的 project_id 参数，避免无限循环
+    router.push('/inspiration')
   }
 }
 
@@ -297,8 +286,8 @@ const handleUserInput = async (userInput: any) => {
       response.question_type === 'complete'
 
     if (shouldGenerate) {
-      confirmationMessage.value = response.message
-      showBlueprintConfirmation.value = true
+      // 显示蓝图向导
+      showBlueprintWizard.value = true
     } else {
       currentUIControl.value = toUIControl(response)
     }
@@ -334,8 +323,8 @@ const handleRegenerate = async () => {
       response.question_type === 'complete'
 
     if (shouldGenerate) {
-      confirmationMessage.value = response.message
-      showBlueprintConfirmation.value = true
+      // 显示蓝图向导
+      showBlueprintWizard.value = true
     } else {
       currentUIControl.value = toUIControl(response)
     }
@@ -367,36 +356,15 @@ function toUIControl(resp: ConverseResponse | any): UIControl | null {
   return null
 }
 
-const handleGenerateBlueprint = async () => {
+// 处理蓝图向导完成事件
+const handleBlueprintComplete = async (blueprintData: any) => {
   try {
-    const response = await novelStore.generateBlueprint()
-    handleBlueprintGenerated(response)
-  } catch (error) {
-    console.error('生成蓝图失败:', error)
-    globalAlert.showError(`生成蓝图失败: ${error instanceof Error ? error.message : '未知错误'}`, '生成失败')
-  }
-}
+    // 保存蓝图到数据库
+    await novelStore.saveBlueprint(blueprintData)
 
-const handleBlueprintGenerated = (response: any) => {
-  console.log('收到蓝图生成完成事件:', response)
-  completedBlueprint.value = response.blueprint
-  blueprintMessage.value = response.ai_message
-  showBlueprintConfirmation.value = false
-  showBlueprint.value = true
-}
+    // 显示成功提示
+    await globalAlert.showSuccess('蓝图创建成功！即将进入写作工作台...', '创建成功')
 
-const handleRegenerateBlueprint = () => {
-  showBlueprint.value = false
-  showBlueprintConfirmation.value = true
-}
-
-const handleConfirmBlueprint = async () => {
-  if (!completedBlueprint.value) {
-    globalAlert.showError('蓝图数据缺失，请重新生成或稍后重试。', '保存失败')
-    return
-  }
-  try {
-    await novelStore.saveBlueprint(completedBlueprint.value)
     // 跳转到写作工作台
     if (novelStore.currentProject) {
       router.push(`/novel/${novelStore.currentProject.id}`)
