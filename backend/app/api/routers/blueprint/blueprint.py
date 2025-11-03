@@ -13,7 +13,7 @@ from ....core.dependencies import get_current_user
 from ....schemas.user import UserInDB
 from ....services.blueprint import BlueprintService
 
-router = APIRouter(prefix="/api/blueprint", tags=["blueprint"])
+router = APIRouter()
 
 
 @router.post(

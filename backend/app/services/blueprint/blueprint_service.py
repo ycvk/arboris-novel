@@ -571,3 +571,200 @@ class BlueprintService:
             })
             raise
             # 不抛出异常，因为蓝图已生成成功
+
+    # ==================== 分阶段生成方法 ====================
+
+    async def generate_stage1_concept(
+        self,
+        conversation_history: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """
+        阶段1：生成核心概念
+        对应原 Step 1
+
+        Returns:
+            {
+                "title": str,
+                "genre": str,
+                "tone": str,
+                "target_audience": str,
+                "style": str,
+                "one_sentence_summary": str
+            }
+        """
+        logger.info("开始生成阶段1：核心概念")
+
+        state = {}
+        state = await self._execute_with_retry(
+            self._step1_generate_basic_info,
+            "阶段1: 生成核心概念",
+            state, conversation_history
+        )
+
+        # 从 state["basic_info"] 中提取阶段1需要的字段
+        basic_info = state.get("basic_info", {})
+        result = {
+            "title": basic_info.get("title", ""),
+            "genre": basic_info.get("genre", ""),
+            "tone": basic_info.get("tone", ""),
+            "target_audience": basic_info.get("target_audience", ""),
+            "style": basic_info.get("style", ""),
+            "one_sentence_summary": basic_info.get("one_sentence_summary", "")
+        }
+
+        logger.info("阶段1生成完成", extra={"title": result["title"]})
+        return result
+
+    async def generate_stage2_framework(
+        self,
+        conversation_history: List[Dict[str, str]],
+        stage1_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        阶段2：生成故事框架
+        对应原 Step 2 + Step 3
+
+        Args:
+            stage1_data: 阶段1的数据
+
+        Returns:
+            {
+                "full_synopsis": str,
+                "world_setting": dict
+            }
+        """
+        logger.info("开始生成阶段2：故事框架")
+
+        # 将阶段1数据放入state，需要包装成 basic_info 格式
+        state = {
+            "basic_info": stage1_data.copy()
+        }
+
+        # 执行 Step 2: 生成故事梗概
+        state = await self._execute_with_retry(
+            self._step2_generate_synopsis,
+            "阶段2-步骤1: 构建故事梗概",
+            state, conversation_history
+        )
+
+        # 执行 Step 3: 生成世界观设定
+        state = await self._execute_with_retry(
+            self._step3_generate_world_setting,
+            "阶段2-步骤2: 设计世界观设定",
+            state
+        )
+
+        result = {
+            "full_synopsis": state.get("full_synopsis", ""),
+            "world_setting": state.get("world_setting", {})
+        }
+
+        logger.info("阶段2生成完成")
+        return result
+
+    async def generate_stage3_characters(
+        self,
+        stage1_data: Dict[str, Any],
+        stage2_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        阶段3：生成角色设定
+        对应原 Step 4 + Step 5
+
+        Args:
+            stage1_data: 阶段1的数据
+            stage2_data: 阶段2的数据
+
+        Returns:
+            {
+                "characters": list,
+                "relationships": list
+            }
+        """
+        logger.info("开始生成阶段3：角色设定")
+
+        # 合并前面阶段的数据，需要包装 stage1_data 为 basic_info
+        state = {
+            "basic_info": stage1_data.copy(),
+            **stage2_data
+        }
+
+        # 执行 Step 4: 生成角色列表
+        state = await self._execute_with_retry(
+            self._step4_generate_characters,
+            "阶段3-步骤1: 创建角色列表",
+            state
+        )
+
+        # 执行 Step 5: 生成角色关系
+        state = await self._execute_with_retry(
+            self._step5_generate_relationships,
+            "阶段3-步骤2: 建立角色关系",
+            state
+        )
+
+        result = {
+            "characters": state.get("characters", []),
+            "relationships": state.get("relationships", [])
+        }
+
+        logger.info("阶段3生成完成", extra={
+            "characters_count": len(result["characters"]),
+            "relationships_count": len(result["relationships"])
+        })
+        return result
+
+    async def generate_stage4_chapters(
+        self,
+        stage1_data: Dict[str, Any],
+        stage2_data: Dict[str, Any],
+        stage3_data: Dict[str, Any],
+        progress_callback: Optional[Callable[[int, int, Dict], Awaitable[None]]] = None,
+    ) -> Dict[str, Any]:
+        """
+        阶段4：生成章节规划
+        对应原 Step 6
+
+        Args:
+            stage1_data: 阶段1的数据
+            stage2_data: 阶段2的数据
+            stage3_data: 阶段3的数据
+            progress_callback: 进度回调，接收(chapter_number, total_chapters, chapter_data)
+
+        Returns:
+            {
+                "chapter_outline": list
+            }
+        """
+        logger.info("开始生成阶段4：章节规划")
+
+        # 合并所有前面阶段的数据，需要包装 stage1_data 为 basic_info
+        state = {
+            "basic_info": stage1_data.copy(),
+            **stage2_data,
+            **stage3_data
+        }
+
+        # 执行 Step 6: 生成章节大纲
+        state = await self._execute_with_retry(
+            self._step6_generate_chapter_outline,
+            "阶段4: 规划章节大纲",
+            state
+        )
+
+        chapter_outline = state.get("chapter_outline", [])
+
+        # 如果提供了进度回调，逐章推送
+        if progress_callback and chapter_outline:
+            total = len(chapter_outline)
+            for idx, chapter in enumerate(chapter_outline, 1):
+                await progress_callback(idx, total, chapter)
+
+        result = {
+            "chapter_outline": chapter_outline
+        }
+
+        logger.info("阶段4生成完成", extra={
+            "chapters_count": len(chapter_outline)
+        })
+        return result
