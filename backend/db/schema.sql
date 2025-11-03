@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS novel_projects (
     title VARCHAR(255) NOT NULL,
     initial_prompt TEXT,
     status VARCHAR(32) DEFAULT 'draft',
+    metadata JSON NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_novel_projects_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE

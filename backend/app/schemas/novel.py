@@ -115,6 +115,8 @@ class NovelProject(BaseModel):
     user_id: int
     title: str
     initial_prompt: str
+    status: str = "draft"
+    metadata: Optional[Dict[str, Any]] = None
     conversation_history: List[Dict[str, Any]] = []
     blueprint: Optional[Blueprint] = None
     chapters: List[Chapter] = []

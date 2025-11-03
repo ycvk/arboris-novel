@@ -15,4 +15,14 @@ if [ "$(stat -c %u "$STORAGE_DIR" 2>/dev/null || echo)" != "1000" ] || \
     chown -R appuser:appuser "$STORAGE_DIR" || echo "Warning: unable to adjust ownership of $STORAGE_DIR"
 fi
 
+# 运行数据库迁移（在应用启动前）
+echo "Running database migrations..."
+python3 /app/db/migrations/run_migrations.py
+MIGRATION_EXIT_CODE=$?
+
+if [ $MIGRATION_EXIT_CODE -ne 0 ]; then
+    echo "Warning: Database migration failed with exit code $MIGRATION_EXIT_CODE"
+    echo "Application will continue to start, but may encounter database errors"
+fi
+
 exec "$@"
