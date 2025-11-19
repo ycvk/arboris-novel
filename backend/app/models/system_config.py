@@ -5,7 +5,7 @@ from ..db.base import Base
 
 
 class SystemConfig(Base):
-    """系统级配置项，例如默认 LLM API Key、模型名称等。"""
+    """系统级配置项，例如默认 LLM API Key、模型名称等。."""
 
     __tablename__ = "system_configs"
 

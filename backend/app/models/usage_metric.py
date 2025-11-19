@@ -5,7 +5,7 @@ from ..db.base import Base
 
 
 class UsageMetric(Base):
-    """通用计数器表，目前用于记录 API 请求次数等统计数据。"""
+    """通用计数器表，目前用于记录 API 请求次数等统计数据。."""
 
     __tablename__ = "usage_metrics"
 

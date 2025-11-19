@@ -5,7 +5,7 @@ from ..db.base import Base
 
 
 class AdminSetting(Base):
-    """后台配置项，采用简单的 KV 结构。"""
+    """后台配置项，采用简单的 KV 结构。."""
 
     __tablename__ = "admin_settings"
 
