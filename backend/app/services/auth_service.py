@@ -2,32 +2,29 @@ import asyncio
 import logging
 import random
 import secrets
+import smtplib
 import string
 import time
-from typing import Dict, Optional
-
-import httpx
 from email.header import Header
 from email.mime.text import MIMEText
 from email.utils import formataddr, parseaddr
-from fastapi import HTTPException, status
 
-import smtplib
+import httpx
+from fastapi import HTTPException, status
 
 from ..core.config import settings
 from ..core.security import create_access_token, hash_password, verify_password
 from ..models import User
 from ..repositories.system_config_repository import SystemConfigRepository
 from ..repositories.user_repository import UserRepository
-from ..schemas.user import AuthOptions, Token, UserCreate, UserInDB, UserRegistration
+from ..schemas.user import AuthOptions, Token, UserInDB, UserRegistration
 
-
-_VERIFICATION_CACHE: Dict[str, tuple[str, float]] = {}
-_LAST_SEND_TIME: Dict[str, float] = {}
+_VERIFICATION_CACHE: dict[str, tuple[str, float]] = {}
+_LAST_SEND_TIME: dict[str, float] = {}
 
 
 class AuthService:
-    """认证与授权逻辑，封装登录、注册、OAuth 对接等操作。"""
+    """认证与授权逻辑，封装登录、注册、OAuth 对接等操作。."""
 
     def __init__(self, session):
         self.session = session
@@ -43,18 +40,24 @@ class AuthService:
     async def authenticate_user(self, username: str, password: str) -> User:
         user = await self.user_repo.get_by_username(username)
         if not user or not verify_password(password, user.hashed_password):
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="用户名或密码错误"
+            )
         return user
 
     async def create_access_token(
         self,
         user: User | UserInDB,
         *,
-        must_change_password: Optional[bool] = None,
+        must_change_password: bool | None = None,
     ) -> Token:
         payload = {"is_admin": user.is_admin}
         token = create_access_token(user.username, extra_claims=payload)
-        should_change = self.requires_password_reset(user) if must_change_password is None else must_change_password
+        should_change = (
+            self.requires_password_reset(user)
+            if must_change_password is None
+            else must_change_password
+        )
         return Token(access_token=token, must_change_password=should_change)
 
     async def register_user(self, payload: UserRegistration) -> User:
@@ -87,7 +90,9 @@ class AuthService:
             raise HTTPException(status_code=403, detail="当前暂未开放注册")
         now = time.time()
         if email in self._last_send_time and now - self._last_send_time[email] < 60:
-            raise HTTPException(status_code=429, detail="请稍后再试，1分钟内不可重复发送")
+            raise HTTPException(
+                status_code=429, detail="请稍后再试，1分钟内不可重复发送"
+            )
 
         code = "".join(random.choices(string.digits, k=6))
         self._verification_cache[email] = (code, now + 300)
@@ -114,7 +119,7 @@ class AuthService:
         self._verification_cache.pop(email, None)
         return True
 
-    async def _load_smtp_config(self) -> Optional[Dict[str, str]]:
+    async def _load_smtp_config(self) -> dict[str, str] | None:
         keys = [
             "smtp.server",
             "smtp.port",
@@ -128,13 +133,21 @@ class AuthService:
             if config:
                 configs[key] = config.value
 
-        required_keys = {"smtp.server", "smtp.port", "smtp.username", "smtp.password", "smtp.from"}
+        required_keys = {
+            "smtp.server",
+            "smtp.port",
+            "smtp.username",
+            "smtp.password",
+            "smtp.from",
+        }
         if not required_keys.issubset(configs.keys()):
             return None
 
         return configs
 
-    async def _send_email(self, to_email: str, code: str, smtp_config: Dict[str, str]) -> None:
+    async def _send_email(
+        self, to_email: str, code: str, smtp_config: dict[str, str]
+    ) -> None:
         logger = logging.getLogger(__name__)
         server = smtp_config["smtp.server"]
         port = int(smtp_config.get("smtp.port", "465"))
@@ -142,7 +155,12 @@ class AuthService:
         password = smtp_config["smtp.password"]
         from_value = smtp_config.get("smtp.from") or username
         display_name, from_addr = parseaddr(from_value)
-        if not display_name and "@" not in from_value and "<" not in from_value and from_value.strip():
+        if (
+            not display_name
+            and "@" not in from_value
+            and "<" not in from_value
+            and from_value.strip()
+        ):
             display_name = from_value.strip()
         if not from_addr or "@" not in from_addr:
             if from_addr and "@" not in from_addr:
@@ -160,14 +178,18 @@ class AuthService:
             )
             from_addr = username
         if display_name:
-            formatted_from = formataddr((Header(display_name, "utf-8").encode(), from_addr))
+            formatted_from = formataddr(
+                (Header(display_name, "utf-8").encode(), from_addr)
+            )
         else:
             formatted_from = from_addr
 
         try:
             to_email.encode("ascii")
         except UnicodeEncodeError as exc:  # noqa: BLE001
-            raise HTTPException(status_code=400, detail="邮箱地址包含不支持的字符") from exc
+            raise HTTPException(
+                status_code=400, detail="邮箱地址包含不支持的字符"
+            ) from exc
 
         html_content = f"""
 <!DOCTYPE html>
@@ -228,7 +250,7 @@ class AuthService:
                                 如非本人操作，请忽略此邮件。
                             </p>
                             <p style=\"font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #9ca3af; margin: 8px 0 0;\">
-                                &copy; {time.strftime('%Y')} 拯救小说家. All rights reserved.
+                                &copy; {time.strftime("%Y")} 拯救小说家. All rights reserved.
                             </p>
                         </td>
                     </tr>
@@ -245,10 +267,12 @@ class AuthService:
         message["From"] = formatted_from
         message["To"] = to_email
 
-        logger.info("准备发送验证码邮件", extra={"to": to_email, "server": server, "port": port})
+        logger.info(
+            "准备发送验证码邮件", extra={"to": to_email, "server": server, "port": port}
+        )
 
         def _send():
-            smtp: Optional[smtplib.SMTP] = None
+            smtp: smtplib.SMTP | None = None
             try:
                 if port == 465:
                     smtp = smtplib.SMTP_SSL(server, port, timeout=10)
@@ -259,7 +283,7 @@ class AuthService:
                     smtp.login(username, password)
                 smtp.sendmail(from_addr, [to_email], message.as_string())
                 logger.info("验证码邮件发送成功", extra={"to": to_email})
-            except Exception as exc:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 logger.exception("验证码发送失败")
                 raise
             finally:
@@ -272,7 +296,9 @@ class AuthService:
         try:
             await asyncio.to_thread(_send)
         except Exception as exc:  # noqa: BLE001
-            raise HTTPException(status_code=500, detail="验证码发送失败，请检查邮件配置") from exc
+            raise HTTPException(
+                status_code=500, detail="验证码发送失败，请检查邮件配置"
+            ) from exc
 
     # ------------------------------------------------------------------
     # OAuth 对接示例（以 Linux.do 为例）
@@ -288,7 +314,9 @@ class AuthService:
         user_info_url = await self._get_config_value("linuxdo.user_info_url")
 
         if not all([client_id, client_secret, redirect_uri, token_url, user_info_url]):
-            raise HTTPException(status_code=500, detail="未正确配置 Linux.do OAuth 参数")
+            raise HTTPException(
+                status_code=500, detail="未正确配置 Linux.do OAuth 参数"
+            )
 
         async with httpx.AsyncClient() as client:
             token_response = await client.post(
@@ -304,7 +332,9 @@ class AuthService:
             token_response.raise_for_status()
             access_token = token_response.json().get("access_token")
             if not access_token:
-                raise HTTPException(status_code=400, detail="授权失败，未获取到访问令牌")
+                raise HTTPException(
+                    status_code=400, detail="授权失败，未获取到访问令牌"
+                )
 
             user_info_response = await client.get(
                 user_info_url,
@@ -328,16 +358,16 @@ class AuthService:
 
         return await self.create_access_token(user)
 
-    async def _get_config_value(self, key: str) -> Optional[str]:
+    async def _get_config_value(self, key: str) -> str | None:
         config = await self.system_config_repo.get_by_key(key)
         return config.value if config else None
 
-    async def get_config_value(self, key: str) -> Optional[str]:
-        """对外暴露的配置读取接口，便于路由层复用。"""
+    async def get_config_value(self, key: str) -> str | None:
+        """对外暴露的配置读取接口，便于路由层复用。."""
         return await self._get_config_value(key)
 
     @staticmethod
-    def _parse_bool(value: Optional[str], fallback: bool) -> bool:
+    def _parse_bool(value: str | None, fallback: bool) -> bool:
         if value is None:
             return fallback
         normalized = value.strip().lower()
@@ -352,8 +382,7 @@ class AuthService:
         return self._parse_bool(value, fallback=settings.enable_linuxdo_login)
 
     async def get_auth_options(self) -> AuthOptions:
-        """聚合与认证相关的动态开关配置，便于前端一次性拉取。"""
-
+        """聚合与认证相关的动态开关配置，便于前端一次性拉取。."""
         allow_registration = await self.is_registration_enabled()
         enable_linuxdo_login = await self.is_linuxdo_login_enabled()
         return AuthOptions(
@@ -371,19 +400,33 @@ class AuthService:
             return False
         return verify_password(settings.admin_default_password, hashed_password)
 
-    async def change_password(self, username: str, old_password: str, new_password: str) -> None:
+    async def change_password(
+        self, username: str, old_password: str, new_password: str
+    ) -> None:
         user = await self.user_repo.get_by_username(username)
         if not user:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在"
+            )
 
         if not verify_password(old_password, user.hashed_password):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码错误")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="当前密码错误"
+            )
 
         if verify_password(new_password, user.hashed_password):
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能与当前密码相同")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="新密码不能与当前密码相同",
+            )
 
-        if username == settings.admin_default_username and new_password == settings.admin_default_password:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能为默认密码")
+        if (
+            username == settings.admin_default_username
+            and new_password == settings.admin_default_password
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="新密码不能为默认密码"
+            )
 
         user.hashed_password = hash_password(new_password)
         await self.session.commit()

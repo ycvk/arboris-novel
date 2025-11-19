@@ -1,5 +1,3 @@
-from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import LLMConfig
@@ -8,13 +6,15 @@ from ..schemas.llm_config import LLMConfigCreate, LLMConfigRead
 
 
 class LLMConfigService:
-    """用户自定义 LLM 配置服务。"""
+    """用户自定义 LLM 配置服务。."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repo = LLMConfigRepository(session)
 
-    async def upsert_config(self, user_id: int, payload: LLMConfigCreate) -> LLMConfigRead:
+    async def upsert_config(
+        self, user_id: int, payload: LLMConfigCreate
+    ) -> LLMConfigRead:
         instance = await self.repo.get_by_user(user_id)
         data = payload.model_dump(exclude_unset=True)
         if "llm_provider_url" in data and data["llm_provider_url"] is not None:
@@ -28,7 +28,7 @@ class LLMConfigService:
         await self.session.commit()
         return LLMConfigRead.model_validate(instance)
 
-    async def get_config(self, user_id: int) -> Optional[LLMConfigRead]:
+    async def get_config(self, user_id: int) -> LLMConfigRead | None:
         instance = await self.repo.get_by_user(user_id)
         return LLMConfigRead.model_validate(instance) if instance else None
 

@@ -14,9 +14,10 @@ import json
 import logging
 import math
 from array import array
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any
 
 from ..core.config import settings
 
@@ -29,12 +30,12 @@ try:  # Qdrant 可选依赖
     from qdrant_client import QdrantClient
     from qdrant_client.http.models import (
         Distance,
-        VectorParams,
-        Filter,
         FieldCondition,
-        MatchValue,
+        Filter,
         MatchAny,
+        MatchValue,
         PointStruct,
+        VectorParams,
     )
 except Exception:  # pragma: no cover - 未安装时允许退化
     QdrantClient = None  # type: ignore[assignment]
@@ -44,18 +45,18 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class RetrievedChunk:
-    """向量检索得到的剧情片段。"""
+    """向量检索得到的剧情片段。."""
 
     content: str
     chapter_number: int
-    chapter_title: Optional[str]
+    chapter_title: str | None
     score: float
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 @dataclass
 class RetrievedSummary:
-    """向量检索得到的章节摘要。"""
+    """向量检索得到的章节摘要。."""
 
     chapter_number: int
     title: str
@@ -64,7 +65,7 @@ class RetrievedSummary:
 
 
 class VectorStoreService:
-    """向量库操作工具，确保不同小说项目的数据隔离。"""
+    """向量库操作工具，确保不同小说项目的数据隔离。."""
 
     def __init__(self) -> None:
         if not settings.vector_store_enabled:
@@ -78,7 +79,9 @@ class VectorStoreService:
         # 兼容性处理：若显式指定 qdrant 但 URL 为 file:，则回退至 libsql
         url_detect = settings.vector_db_url or ""
         if provider == "qdrant" and url_detect.startswith("file:"):
-            logger.warning("VECTOR_DB_URL=%s 与 Qdrant 提供方不匹配，回退为 libsql。", url_detect)
+            logger.warning(
+                "VECTOR_DB_URL=%s 与 Qdrant 提供方不匹配，回退为 libsql。", url_detect
+            )
             provider = "libsql"
         self._provider = provider
 
@@ -87,7 +90,9 @@ class VectorStoreService:
                 raise RuntimeError("缺少 qdrant-client 依赖，请先在环境中安装。")
             base_url = settings.vector_db_url
             logger.info("初始化 Qdrant 客户端: url=%s", base_url)
-            self._client = QdrantClient(url=base_url, api_key=settings.vector_db_auth_token)
+            self._client = QdrantClient(
+                url=base_url, api_key=settings.vector_db_auth_token
+            )
             self._schema_ready = False
             self._qdrant_chunks = f"{settings.qdrant_collection_prefix}_chunks"
             self._qdrant_summaries = f"{settings.qdrant_collection_prefix}_summaries"
@@ -120,7 +125,7 @@ class VectorStoreService:
             logger.info("libsql 客户端初始化成功，等待建表。")
 
     async def ensure_schema(self) -> None:
-        """初始化向量表结构，保证系统首次运行即可使用。"""
+        """初始化向量表结构，保证系统首次运行即可使用。."""
         if not self._client or self._schema_ready:
             return
 
@@ -184,9 +189,9 @@ class VectorStoreService:
         *,
         project_id: str,
         embedding: Sequence[float],
-        top_k: Optional[int] = None,
-    ) -> List[RetrievedChunk]:
-        """根据查询向量检索剧情片段，结果已按相似度排序。"""
+        top_k: int | None = None,
+    ) -> list[RetrievedChunk]:
+        """根据查询向量检索剧情片段，结果已按相似度排序。."""
         if not self._client or not embedding:
             return []
 
@@ -197,7 +202,13 @@ class VectorStoreService:
 
         if self._provider == "qdrant":
             try:
-                flt = Filter(must=[FieldCondition(key="project_id", match=MatchValue(value=project_id))])
+                flt = Filter(
+                    must=[
+                        FieldCondition(
+                            key="project_id", match=MatchValue(value=project_id)
+                        )
+                    ]
+                )
                 results = self._client.search(
                     collection_name=self._qdrant_chunks,  # type: ignore[attr-defined]
                     query_vector=list(embedding),
@@ -207,7 +218,7 @@ class VectorStoreService:
             except Exception as exc:  # pragma: no cover
                 logger.warning("Qdrant 检索剧情片段失败: %s", exc)
                 return []
-            items: List[RetrievedChunk] = []
+            items: list[RetrievedChunk] = []
             for sp in results:
                 payload = sp.payload or {}
                 items.append(
@@ -246,7 +257,9 @@ class VectorStoreService:
             )
         except Exception as exc:  # pragma: no cover - 查询异常时仅记录
             if "no such function: vector_distance_cosine" in str(exc).lower():
-                logger.warning("向量库缺少 vector_distance_cosine 函数，回退至应用层相似度计算。")
+                logger.warning(
+                    "向量库缺少 vector_distance_cosine 函数，回退至应用层相似度计算。"
+                )
                 return await self._query_chunks_with_python_similarity(
                     project_id=project_id,
                     embedding=embedding,
@@ -255,7 +268,7 @@ class VectorStoreService:
             logger.warning("向量检索剧情片段失败: %s", exc)
             return []
 
-        items: List[RetrievedChunk] = []
+        items: list[RetrievedChunk] = []
         for row in self._iter_rows(result):
             items.append(
                 RetrievedChunk(
@@ -273,9 +286,9 @@ class VectorStoreService:
         *,
         project_id: str,
         embedding: Sequence[float],
-        top_k: Optional[int] = None,
-    ) -> List[RetrievedSummary]:
-        """根据查询向量检索章节摘要列表。"""
+        top_k: int | None = None,
+    ) -> list[RetrievedSummary]:
+        """根据查询向量检索章节摘要列表。."""
         if not self._client or not embedding:
             return []
 
@@ -286,7 +299,13 @@ class VectorStoreService:
 
         if self._provider == "qdrant":
             try:
-                flt = Filter(must=[FieldCondition(key="project_id", match=MatchValue(value=project_id))])
+                flt = Filter(
+                    must=[
+                        FieldCondition(
+                            key="project_id", match=MatchValue(value=project_id)
+                        )
+                    ]
+                )
                 results = self._client.search(
                     collection_name=self._qdrant_summaries,  # type: ignore[attr-defined]
                     query_vector=list(embedding),
@@ -296,7 +315,7 @@ class VectorStoreService:
             except Exception as exc:  # pragma: no cover
                 logger.warning("Qdrant 检索章节摘要失败: %s", exc)
                 return []
-            items: List[RetrievedSummary] = []
+            items: list[RetrievedSummary] = []
             for sp in results:
                 payload = sp.payload or {}
                 items.append(
@@ -332,7 +351,9 @@ class VectorStoreService:
             )
         except Exception as exc:  # pragma: no cover - 查询异常时仅记录
             if "no such function: vector_distance_cosine" in str(exc).lower():
-                logger.warning("向量库缺少 vector_distance_cosine 函数，回退至应用层相似度计算。")
+                logger.warning(
+                    "向量库缺少 vector_distance_cosine 函数，回退至应用层相似度计算。"
+                )
                 return await self._query_summaries_with_python_similarity(
                     project_id=project_id,
                     embedding=embedding,
@@ -341,7 +362,7 @@ class VectorStoreService:
             logger.warning("向量检索章节摘要失败: %s", exc)
             return []
 
-        items: List[RetrievedSummary] = []
+        items: list[RetrievedSummary] = []
         for row in self._iter_rows(result):
             items.append(
                 RetrievedSummary(
@@ -356,9 +377,9 @@ class VectorStoreService:
     async def upsert_chunks(
         self,
         *,
-        records: Iterable[Dict[str, Any]],
+        records: Iterable[dict[str, Any]],
     ) -> None:
-        """批量写入章节片段，供后续检索使用。"""
+        """批量写入章节片段，供后续检索使用。."""
         if not self._client:
             return
 
@@ -390,7 +411,9 @@ class VectorStoreService:
                 points.append(PointStruct(id=pid, vector=list(emb), payload=payload))
             if points:
                 try:
-                    self._client.upsert(collection_name=self._qdrant_chunks, points=points)  # type: ignore[attr-defined]
+                    self._client.upsert(
+                        collection_name=self._qdrant_chunks, points=points
+                    )  # type: ignore[attr-defined]
                     logger.debug("Qdrant 已写入章节片段: count=%d", len(points))
                 except Exception as exc:  # pragma: no cover
                     logger.error("Qdrant 写入 rag_chunks 失败: %s", exc)
@@ -430,7 +453,9 @@ class VectorStoreService:
                 {
                     **item,
                     "embedding": self._to_f32_blob(embedding),
-                    "metadata": json.dumps(item.get("metadata") or {}, ensure_ascii=False),
+                    "metadata": json.dumps(
+                        item.get("metadata") or {}, ensure_ascii=False
+                    ),
                 }
             )
 
@@ -453,9 +478,9 @@ class VectorStoreService:
     async def upsert_summaries(
         self,
         *,
-        records: Iterable[Dict[str, Any]],
+        records: Iterable[dict[str, Any]],
     ) -> None:
-        """同步章节摘要向量，供摘要层检索使用。"""
+        """同步章节摘要向量，供摘要层检索使用。."""
         if not self._client:
             return
 
@@ -485,7 +510,9 @@ class VectorStoreService:
                 points.append(PointStruct(id=pid, vector=list(emb), payload=payload))
             if points:
                 try:
-                    self._client.upsert(collection_name=self._qdrant_summaries, points=points)  # type: ignore[attr-defined]
+                    self._client.upsert(
+                        collection_name=self._qdrant_summaries, points=points
+                    )  # type: ignore[attr-defined]
                     logger.debug("Qdrant 已写入章节摘要: count=%d", len(points))
                 except Exception as exc:  # pragma: no cover
                     logger.error("Qdrant 写入 rag_summaries 失败: %s", exc)
@@ -540,8 +567,8 @@ class VectorStoreService:
                 )
 
     # -------------------- 统计接口（用于 /admin RAG 状态） --------------------
-    async def count_totals(self) -> Dict[str, int]:
-        """统计全局 chunks/summaries 数量。"""
+    async def count_totals(self) -> dict[str, int]:
+        """统计全局 chunks/summaries 数量。."""
         if not self._client:
             return {"chunks": 0, "summaries": 0}
         await self.ensure_schema()
@@ -577,19 +604,27 @@ class VectorStoreService:
             summaries = 0
         return {"chunks": chunks, "summaries": summaries}
 
-    async def count_by_project(self, project_id: str) -> Dict[str, int]:
-        """统计指定项目的 chunks/summaries 数量。"""
+    async def count_by_project(self, project_id: str) -> dict[str, int]:
+        """统计指定项目的 chunks/summaries 数量。."""
         if not self._client:
             return {"chunks": 0, "summaries": 0}
         await self.ensure_schema()
         if self._provider == "qdrant":
-            flt = Filter(must=[FieldCondition(key="project_id", match=MatchValue(value=project_id))])
+            flt = Filter(
+                must=[
+                    FieldCondition(key="project_id", match=MatchValue(value=project_id))
+                ]
+            )
             try:
-                c1 = self._client.count(self._qdrant_chunks, count_filter=flt, exact=True).count  # type: ignore[attr-defined]
+                c1 = self._client.count(
+                    self._qdrant_chunks, count_filter=flt, exact=True
+                ).count  # type: ignore[attr-defined]
             except Exception:
                 c1 = 0
             try:
-                c2 = self._client.count(self._qdrant_summaries, count_filter=flt, exact=True).count  # type: ignore[attr-defined]
+                c2 = self._client.count(
+                    self._qdrant_summaries, count_filter=flt, exact=True
+                ).count  # type: ignore[attr-defined]
             except Exception:
                 c2 = 0
             return {"chunks": int(c1 or 0), "summaries": int(c2 or 0)}
@@ -616,8 +651,10 @@ class VectorStoreService:
             summaries = 0
         return {"chunks": chunks, "summaries": summaries}
 
-    async def delete_by_chapters(self, project_id: str, chapter_numbers: Sequence[int]) -> None:
-        """根据章节编号批量删除对应的上下文数据。"""
+    async def delete_by_chapters(
+        self, project_id: str, chapter_numbers: Sequence[int]
+    ) -> None:
+        """根据章节编号批量删除对应的上下文数据。."""
         if not self._client or not chapter_numbers:
             return
 
@@ -625,18 +662,35 @@ class VectorStoreService:
 
         if self._provider == "qdrant":
             try:
-                flt = Filter(must=[
-                    FieldCondition(key="project_id", match=MatchValue(value=project_id)),
-                    FieldCondition(key="chapter_number", match=MatchAny(any=list(chapter_numbers))),
-                ])
-                self._client.delete(collection_name=self._qdrant_chunks, points_selector=flt)  # type: ignore[attr-defined]
-                self._client.delete(collection_name=self._qdrant_summaries, points_selector=flt)  # type: ignore[attr-defined]
-                logger.info("Qdrant 已删除章节向量: project=%s chapters=%s", project_id, list(chapter_numbers))
+                flt = Filter(
+                    must=[
+                        FieldCondition(
+                            key="project_id", match=MatchValue(value=project_id)
+                        ),
+                        FieldCondition(
+                            key="chapter_number",
+                            match=MatchAny(any=list(chapter_numbers)),
+                        ),
+                    ]
+                )
+                self._client.delete(
+                    collection_name=self._qdrant_chunks, points_selector=flt
+                )  # type: ignore[attr-defined]
+                self._client.delete(
+                    collection_name=self._qdrant_summaries, points_selector=flt
+                )  # type: ignore[attr-defined]
+                logger.info(
+                    "Qdrant 已删除章节向量: project=%s chapters=%s",
+                    project_id,
+                    list(chapter_numbers),
+                )
             except Exception as exc:  # pragma: no cover
                 logger.warning("Qdrant 删除章节向量失败: %s", exc)
             return
 
-        placeholders = ",".join(":chapter_" + str(idx) for idx in range(len(chapter_numbers)))
+        placeholders = ",".join(
+            ":chapter_" + str(idx) for idx in range(len(chapter_numbers))
+        )
         params = {
             "project_id": project_id,
             **{f"chapter_{idx}": number for idx, number in enumerate(chapter_numbers)},
@@ -660,16 +714,21 @@ class VectorStoreService:
                 list(chapter_numbers),
             )
         except Exception as exc:  # pragma: no cover - 删除失败时记录日志
-            logger.error("删除章节向量失败: project=%s chapters=%s error=%s", project_id, chapter_numbers, exc)
+            logger.error(
+                "删除章节向量失败: project=%s chapters=%s error=%s",
+                project_id,
+                chapter_numbers,
+                exc,
+            )
 
     @staticmethod
     def _to_f32_blob(embedding: Sequence[float]) -> bytes:
-        """将向量浮点列表编码为 libsql 可识别的 float32 二进制。"""
+        """将向量浮点列表编码为 libsql 可识别的 float32 二进制。."""
         return array("f", embedding).tobytes()
 
     @staticmethod
-    def _from_f32_blob(blob: Any) -> List[float]:
-        """将数据库中的 BLOB 解码为浮点列表。"""
+    def _from_f32_blob(blob: Any) -> list[float]:
+        """将数据库中的 BLOB 解码为浮点列表。."""
         if not blob:
             return []
         if isinstance(blob, memoryview):
@@ -680,7 +739,7 @@ class VectorStoreService:
 
     @staticmethod
     def _cosine_distance(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
-        """计算余弦距离（1 - similarity），避免除零。"""
+        """计算余弦距离（1 - similarity），避免除零。."""
         if not vec_a or not vec_b:
             return 1.0
         dot = sum(a * b for a, b in zip(vec_a, vec_b))
@@ -697,7 +756,7 @@ class VectorStoreService:
         project_id: str,
         embedding: Sequence[float],
         top_k: int,
-    ) -> List[RetrievedChunk]:
+    ) -> list[RetrievedChunk]:
         sql = """
         SELECT
             content,
@@ -709,7 +768,7 @@ class VectorStoreService:
         WHERE project_id = :project_id
         """
         result = await self._client.execute(sql, {"project_id": project_id})  # type: ignore[union-attr]
-        scored: List[RetrievedChunk] = []
+        scored: list[RetrievedChunk] = []
         for row in self._iter_rows(result):
             stored_embedding = self._from_f32_blob(row.get("embedding"))
             distance = self._cosine_distance(embedding, stored_embedding)
@@ -731,7 +790,7 @@ class VectorStoreService:
         project_id: str,
         embedding: Sequence[float],
         top_k: int,
-    ) -> List[RetrievedSummary]:
+    ) -> list[RetrievedSummary]:
         sql = """
         SELECT
             chapter_number,
@@ -742,7 +801,7 @@ class VectorStoreService:
         WHERE project_id = :project_id
         """
         result = await self._client.execute(sql, {"project_id": project_id})  # type: ignore[union-attr]
-        scored: List[RetrievedSummary] = []
+        scored: list[RetrievedSummary] = []
         for row in self._iter_rows(result):
             stored_embedding = self._from_f32_blob(row.get("embedding"))
             distance = self._cosine_distance(embedding, stored_embedding)
@@ -758,8 +817,8 @@ class VectorStoreService:
         return scored[:top_k]
 
     @staticmethod
-    def _parse_metadata(raw: Any) -> Dict[str, Any]:
-        """解析存储的 JSON 文本，确保输出为 dict。"""
+    def _parse_metadata(raw: Any) -> dict[str, Any]:
+        """解析存储的 JSON 文本，确保输出为 dict。."""
         if not raw:
             return {}
         if isinstance(raw, dict):
@@ -775,14 +834,14 @@ class VectorStoreService:
         return {}
 
     @staticmethod
-    def _iter_rows(result: Any) -> Iterable[Dict[str, Any]]:
-        """统一处理 libsql 返回的行数据，确保以 dict 形式迭代。"""
+    def _iter_rows(result: Any) -> Iterable[dict[str, Any]]:
+        """统一处理 libsql 返回的行数据，确保以 dict 形式迭代。."""
         rows = getattr(result, "rows", None)
         if rows is None:
             rows = result
         if not rows:
             return []
-        normalized: List[Dict[str, Any]] = []
+        normalized: list[dict[str, Any]] = []
         for row in rows:
             if isinstance(row, dict):
                 normalized.append(row)
@@ -798,7 +857,7 @@ class VectorStoreService:
     # -------------------- Qdrant 辅助 --------------------
     @staticmethod
     def _stable_int_id(text: str) -> int:
-        """将字符串 ID 稳定映射为 64 位整数，便于 Qdrant 作为 point id 使用。"""
+        """将字符串 ID 稳定映射为 64 位整数，便于 Qdrant 作为 point id 使用。."""
         if not text:
             return 0
         import hashlib

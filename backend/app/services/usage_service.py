@@ -4,7 +4,7 @@ from ..repositories.usage_metric_repository import UsageMetricRepository
 
 
 class UsageService:
-    """通用计数服务，目前用于统计 API 请求次数等。"""
+    """通用计数服务，目前用于统计 API 请求次数等。."""
 
     def __init__(self, session: AsyncSession):
         self.session = session

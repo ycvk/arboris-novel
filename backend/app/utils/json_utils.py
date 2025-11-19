@@ -2,14 +2,14 @@ import re
 
 
 def remove_think_tags(raw_text: str) -> str:
-    """移除 <think></think> 标签，避免污染结果。"""
+    """移除 <think></think> 标签，避免污染结果。."""
     if not raw_text:
         return raw_text
     return re.sub(r"<think>.*?</think>", "", raw_text, flags=re.DOTALL).strip()
 
 
 def unwrap_markdown_json(raw_text: str) -> str:
-    """从 Markdown 或普通文本中提取 JSON 字符串。"""
+    """从 Markdown 或普通文本中提取 JSON 字符串。."""
     if not raw_text:
         return raw_text
 
@@ -21,7 +21,9 @@ def unwrap_markdown_json(raw_text: str) -> str:
         if candidate:
             return candidate
 
-    json_start_candidates = [idx for idx in (trimmed.find("{"), trimmed.find("[")) if idx != -1]
+    json_start_candidates = [
+        idx for idx in (trimmed.find("{"), trimmed.find("[")) if idx != -1
+    ]
     if json_start_candidates:
         start_idx = min(json_start_candidates)
         closing_brace = trimmed.rfind("}")
@@ -36,7 +38,7 @@ def unwrap_markdown_json(raw_text: str) -> str:
 
 
 def sanitize_json_like_text(raw_text: str) -> str:
-    """对可能含有未转义换行/引号的 JSON 文本进行清洗。"""
+    """对可能含有未转义换行/引号的 JSON 文本进行清洗。."""
     if not raw_text:
         return raw_text
 

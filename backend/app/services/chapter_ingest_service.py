@@ -7,7 +7,7 @@ from __future__ import annotations
 """
 
 import logging
-from typing import Dict, List, Optional, Sequence
+from collections.abc import Sequence
 
 from ..core.config import settings
 from ..services.llm_service import LLMService
@@ -22,13 +22,13 @@ except ImportError:  # pragma: no cover - 未安装时会走后备方案
 
 
 class ChapterIngestionService:
-    """封装章节内容与摘要的向量化与入库流程。"""
+    """封装章节内容与摘要的向量化与入库流程。."""
 
     def __init__(
         self,
         *,
         llm_service: LLMService,
-        vector_store: Optional[VectorStoreService] = None,
+        vector_store: VectorStoreService | None = None,
     ) -> None:
         self._llm_service = llm_service
         self._vector_store = vector_store or VectorStoreService()
@@ -41,20 +41,32 @@ class ChapterIngestionService:
         chapter_number: int,
         title: str,
         content: str,
-        summary: Optional[str],
+        summary: str | None,
         user_id: int,
     ) -> None:
-        """将章节正文与摘要写入向量库，供后续 RAG 检索使用。"""
+        """将章节正文与摘要写入向量库，供后续 RAG 检索使用。."""
         if not settings.vector_store_enabled:
-            logger.debug("向量库未启用，跳过章节向量写入: project=%s chapter=%s", project_id, chapter_number)
+            logger.debug(
+                "向量库未启用，跳过章节向量写入: project=%s chapter=%s",
+                project_id,
+                chapter_number,
+            )
             return
         if not content.strip():
-            logger.debug("章节正文为空，跳过向量写入: project=%s chapter=%s", project_id, chapter_number)
+            logger.debug(
+                "章节正文为空，跳过向量写入: project=%s chapter=%s",
+                project_id,
+                chapter_number,
+            )
             return
 
         chunks = self._split_into_chunks(content)
         if not chunks:
-            logger.debug("章节正文切分后为空，跳过向量写入: project=%s chapter=%s", project_id, chapter_number)
+            logger.debug(
+                "章节正文切分后为空，跳过向量写入: project=%s chapter=%s",
+                project_id,
+                chapter_number,
+            )
             return
 
         logger.info(
@@ -138,8 +150,10 @@ class ChapterIngestionService:
                         chapter_number,
                     )
 
-    async def delete_chapters(self, project_id: str, chapter_numbers: Sequence[int]) -> None:
-        """从向量库中删除指定章节的所有片段与摘要。"""
+    async def delete_chapters(
+        self, project_id: str, chapter_numbers: Sequence[int]
+    ) -> None:
+        """从向量库中删除指定章节的所有片段与摘要。."""
         if not settings.vector_store_enabled or not chapter_numbers:
             return
         logger.info(
@@ -149,14 +163,17 @@ class ChapterIngestionService:
         )
         await self._vector_store.delete_by_chapters(project_id, list(chapter_numbers))
 
-    def _split_into_chunks(self, text: str) -> List[str]:
-        """按照配置的 chunk 大小与重叠度切分章节正文。"""
+    def _split_into_chunks(self, text: str) -> list[str]:
+        """按照配置的 chunk 大小与重叠度切分章节正文。."""
         normalized = text.strip()
         if not normalized:
             return []
 
         if self._text_splitter:
-            parts = [segment.strip() for segment in self._text_splitter.split_text(normalized)]
+            parts = [
+                segment.strip()
+                for segment in self._text_splitter.split_text(normalized)
+            ]
             filtered = [part for part in parts if part]
             if filtered:
                 logger.debug(
@@ -170,9 +187,9 @@ class ChapterIngestionService:
         return self._legacy_split(normalized)
 
     @staticmethod
-    def _find_split_offset(segment: str) -> Optional[int]:
-        """在片段内部寻找更自然的分割点，优先换行，其次常见标点。"""
-        candidates: Dict[str, int] = {}
+    def _find_split_offset(segment: str) -> int | None:
+        """在片段内部寻找更自然的分割点，优先换行，其次常见标点。."""
+        candidates: dict[str, int] = {}
         newline_pos = segment.rfind("\n\n")
         if newline_pos == -1:
             newline_pos = segment.rfind("\n")
@@ -194,10 +211,12 @@ class ChapterIngestionService:
             return None
         return best_offset
 
-    def _init_text_splitter(self) -> Optional["RecursiveCharacterTextSplitter"]:
-        """初始化 LangChain 文本切分器，可根据配置动态调整。"""
+    def _init_text_splitter(self) -> RecursiveCharacterTextSplitter | None:
+        """初始化 LangChain 文本切分器，可根据配置动态调整。."""
         if RecursiveCharacterTextSplitter is None:
-            logger.warning("未安装 langchain-text-splitters，章节切分将回退至内置策略。")
+            logger.warning(
+                "未安装 langchain-text-splitters，章节切分将回退至内置策略。"
+            )
             return None
 
         chunk_size = settings.vector_chunk_size
@@ -205,9 +224,15 @@ class ChapterIngestionService:
         separators = [
             "\n\n",
             "\n",
-            "。", "！", "？",
-            "!", "?", "；", ";",
-            "，", ",",
+            "。",
+            "！",
+            "？",
+            "!",
+            "?",
+            "；",
+            ";",
+            "，",
+            ",",
             " ",
         ]
         splitter = RecursiveCharacterTextSplitter(
@@ -224,12 +249,12 @@ class ChapterIngestionService:
         )
         return splitter
 
-    def _legacy_split(self, text: str) -> List[str]:
-        """内置切分策略，作为 LangChain 缺失时的后备方案。"""
+    def _legacy_split(self, text: str) -> list[str]:
+        """内置切分策略，作为 LangChain 缺失时的后备方案。."""
         chunk_size = settings.vector_chunk_size
         overlap = min(settings.vector_chunk_overlap, chunk_size // 2)
 
-        chunks: List[str] = []
+        chunks: list[str] = []
         start = 0
         total_length = len(text)
 

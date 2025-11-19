@@ -7,38 +7,35 @@ from __future__ import annotations
 """
 
 import logging
-from dataclasses import dataclass
 import time
-from typing import List, Optional
+from dataclasses import dataclass
 
 from ..core.config import settings
+from ..repositories.rag_metrics_repository import RAGMetricsRepository
 from ..services.llm_service import LLMService
 from .vector_store_service import RetrievedChunk, RetrievedSummary, VectorStoreService
-from ..repositories.rag_metrics_repository import RAGMetricsRepository
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ChapterRAGContext:
-    """封装检索得到的上下文结果。"""
+    """封装检索得到的上下文结果。."""
 
     query: str
-    chunks: List[RetrievedChunk]
-    summaries: List[RetrievedSummary]
+    chunks: list[RetrievedChunk]
+    summaries: list[RetrievedSummary]
 
-    def chunk_texts(self) -> List[str]:
-        """将检索到的 chunk 转换成带序号的 Markdown 段落。"""
+    def chunk_texts(self) -> list[str]:
+        """将检索到的 chunk 转换成带序号的 Markdown 段落。."""
         lines = []
         for idx, chunk in enumerate(self.chunks, start=1):
             title = chunk.chapter_title or f"第{chunk.chapter_number}章"
-            lines.append(
-                f"### Chunk {idx}(来源：{title})\n{chunk.content.strip()}"
-            )
+            lines.append(f"### Chunk {idx}(来源：{title})\n{chunk.content.strip()}")
         return lines
 
-    def summary_lines(self) -> List[str]:
-        """整理章节摘要，方便直接插入 Prompt。"""
+    def summary_lines(self) -> list[str]:
+        """整理章节摘要，方便直接插入 Prompt。."""
         lines = []
         for summary in self.summaries:
             lines.append(
@@ -48,13 +45,13 @@ class ChapterRAGContext:
 
 
 class ChapterContextService:
-    """章节上下文服务，整合查询、格式化与容错逻辑。"""
+    """章节上下文服务，整合查询、格式化与容错逻辑。."""
 
     def __init__(
         self,
         *,
         llm_service: LLMService,
-        vector_store: Optional[VectorStoreService] = None,
+        vector_store: VectorStoreService | None = None,
     ) -> None:
         self._llm_service = llm_service
         self._vector_store = vector_store
@@ -66,23 +63,36 @@ class ChapterContextService:
         project_id: str,
         query_text: str,
         user_id: int,
-        top_k_chunks: Optional[int] = None,
-        top_k_summaries: Optional[int] = None,
+        top_k_chunks: int | None = None,
+        top_k_summaries: int | None = None,
     ) -> ChapterRAGContext:
-        """根据章节摘要构造检索向量，并返回 RAG 上下文。"""
+        """根据章节摘要构造检索向量，并返回 RAG 上下文。."""
         query = self._normalize(query_text)
         if not settings.vector_store_enabled or not self._vector_store:
             logger.debug("向量库未启用或初始化失败，跳过检索: project=%s", project_id)
             return ChapterRAGContext(query=query, chunks=[], summaries=[])
 
         start = time.perf_counter()
-        embedding_model = None if settings.embedding_provider == "ollama" else settings.embedding_model
-        embedding = await self._llm_service.get_embedding(query, user_id=user_id, model=embedding_model)
+        embedding_model = (
+            None
+            if settings.embedding_provider == "ollama"
+            else settings.embedding_model
+        )
+        embedding = await self._llm_service.get_embedding(
+            query, user_id=user_id, model=embedding_model
+        )
         if not embedding:
-            logger.warning("检索查询向量生成失败: project=%s chapter_query=%s", project_id, query)
+            logger.warning(
+                "检索查询向量生成失败: project=%s chapter_query=%s", project_id, query
+            )
             ctx = ChapterRAGContext(query=query, chunks=[], summaries=[])
             # 记录一次空检索（无向量）
-            await self._log_metrics(project_id, latency_ms=int((time.perf_counter() - start) * 1000), chunks=[], summaries=[])
+            await self._log_metrics(
+                project_id,
+                latency_ms=int((time.perf_counter() - start) * 1000),
+                chunks=[],
+                summaries=[],
+            )
             return ctx
 
         chunks = await self._vector_store.query_chunks(
@@ -103,7 +113,9 @@ class ChapterContextService:
             len(summaries),
             query[:80],
         )
-        await self._log_metrics(project_id, latency_ms=latency_ms, chunks=chunks, summaries=summaries)
+        await self._log_metrics(
+            project_id, latency_ms=latency_ms, chunks=chunks, summaries=summaries
+        )
         return ChapterRAGContext(query=query, chunks=chunks, summaries=summaries)
 
     async def _log_metrics(
@@ -111,14 +123,20 @@ class ChapterContextService:
         project_id: str,
         *,
         latency_ms: int,
-        chunks: List[RetrievedChunk],
-        summaries: List[RetrievedSummary],
+        chunks: list[RetrievedChunk],
+        summaries: list[RetrievedSummary],
     ) -> None:
-        """记录一次检索的指标：延迟、结果规模、重复片段率。"""
+        """记录一次检索的指标：延迟、结果规模、重复片段率。."""
         try:
             repo = RAGMetricsRepository(self._session)
-            duplicate_ratio = self._compute_duplicate_ratio([c.content or "" for c in chunks])
-            provider = getattr(self._vector_store, "_provider", "libsql") if self._vector_store else "none"
+            duplicate_ratio = self._compute_duplicate_ratio(
+                [c.content or "" for c in chunks]
+            )
+            provider = (
+                getattr(self._vector_store, "_provider", "libsql")
+                if self._vector_store
+                else "none"
+            )
             await repo.add(
                 project_id=project_id,
                 latency_ms=latency_ms,
@@ -177,7 +195,7 @@ class ChapterContextService:
 
     @staticmethod
     def _normalize(text: str) -> str:
-        """统一压缩空白字符，避免影响检索效果。"""
+        """统一压缩空白字符，避免影响检索效果。."""
         return " ".join(text.split())
 
 

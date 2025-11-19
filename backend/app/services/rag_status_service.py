@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 import logging
-from typing import List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.config import settings
 from ..models.novel import NovelProject
+from ..repositories.rag_metrics_repository import RAGMetricsRepository
 from ..schemas.admin import RAGProjectStat, RAGStatus
 from .vector_store_service import VectorStoreService
-from ..repositories.rag_metrics_repository import RAGMetricsRepository
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class RAGStatusService:
         embedding_dim = settings.embedding_model_vector_size
 
         totals = {"chunks": 0, "summaries": 0}
-        top_projects: List[RAGProjectStat] = []
+        top_projects: list[RAGProjectStat] = []
 
         if enabled:
             try:
@@ -41,7 +40,9 @@ class RAGStatusService:
             # 这样避免在 Qdrant 上做 group-by
             try:
                 result = await self.session.execute(
-                    select(NovelProject.id, NovelProject.title).order_by(NovelProject.updated_at.desc()).limit(top_n_projects)
+                    select(NovelProject.id, NovelProject.title)
+                    .order_by(NovelProject.updated_at.desc())
+                    .limit(top_n_projects)
                 )
                 rows = list(result.all())
                 for pid, title in rows:

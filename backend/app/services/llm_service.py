@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import HTTPException, status
@@ -24,7 +23,7 @@ except ImportError:  # pragma: no cover - Ollama 为可选依赖
 
 
 class LLMService:
-    """封装与大模型交互的所有逻辑，包括配额控制与配置选择。"""
+    """封装与大模型交互的所有逻辑，包括配额控制与配置选择。."""
 
     def __init__(self, session):
         self.session = session
@@ -33,21 +32,23 @@ class LLMService:
         self.user_repo = UserRepository(session)
         self.admin_setting_service = AdminSettingService(session)
         self.usage_service = UsageService(session)
-        self._embedding_dimensions: Dict[str, int] = {}
+        self._embedding_dimensions: dict[str, int] = {}
 
     async def get_llm_response(
         self,
         system_prompt: str,
-        conversation_history: List[Dict[str, str]],
+        conversation_history: list[dict[str, str]],
         *,
         temperature: float = 0.7,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         timeout: float = 300.0,
-        response_format: Optional[str] = "json_object",
-        max_tokens: Optional[int] = None,
+        response_format: str | None = "json_object",
+        max_tokens: int | None = None,
     ) -> str:
         messages = [{"role": "system", "content": system_prompt}, *conversation_history]
-        effective_max_tokens = max_tokens if max_tokens is not None else settings.llm_completion_max_tokens
+        effective_max_tokens = (
+            max_tokens if max_tokens is not None else settings.llm_completion_max_tokens
+        )
         return await self._stream_and_collect(
             messages,
             temperature=temperature,
@@ -62,16 +63,19 @@ class LLMService:
         chapter_content: str,
         *,
         temperature: float = 0.2,
-        user_id: Optional[int] = None,
+        user_id: int | None = None,
         timeout: float = 180.0,
-        system_prompt: Optional[str] = None,
+        system_prompt: str | None = None,
     ) -> str:
         if not system_prompt:
             prompt_service = PromptService(self.session)
             system_prompt = await prompt_service.get_prompt("extraction")
         if not system_prompt:
             logger.error("未配置名为 'extraction' 的摘要提示词，无法生成章节摘要")
-            raise HTTPException(status_code=500, detail="未配置摘要提示词，请联系管理员配置 'extraction' 提示词")
+            raise HTTPException(
+                status_code=500,
+                detail="未配置摘要提示词，请联系管理员配置 'extraction' 提示词",
+            )
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": chapter_content},
@@ -86,18 +90,20 @@ class LLMService:
 
     async def _stream_and_collect(
         self,
-        messages: List[Dict[str, str]],
+        messages: list[dict[str, str]],
         *,
         temperature: float,
-        user_id: Optional[int],
+        user_id: int | None,
         timeout: float,
-        response_format: Optional[str] = None,
-        max_tokens: Optional[int] = None,
+        response_format: str | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         config = await self._resolve_llm_config(user_id)
         client = LLMClient(api_key=config["api_key"], base_url=config.get("base_url"))
 
-        chat_messages = [ChatMessage(role=msg["role"], content=msg["content"]) for msg in messages]
+        chat_messages = [
+            ChatMessage(role=msg["role"], content=msg["content"]) for msg in messages
+        ]
 
         full_response = ""
         finish_reason = None
@@ -128,8 +134,14 @@ class LLMService:
             if response is not None:
                 try:
                     payload = response.json()
-                    error_data = payload.get("error", {}) if isinstance(payload, dict) else {}
-                    detail = error_data.get("message_zh") or error_data.get("message") or detail
+                    error_data = (
+                        payload.get("error", {}) if isinstance(payload, dict) else {}
+                    )
+                    detail = (
+                        error_data.get("message_zh")
+                        or error_data.get("message")
+                        or detail
+                    )
                 except Exception:
                     detail = str(exc) or detail
             else:
@@ -142,7 +154,12 @@ class LLMService:
                 exc_info=exc,
             )
             raise HTTPException(status_code=503, detail=detail)
-        except (httpx.RemoteProtocolError, httpx.ReadTimeout, APIConnectionError, APITimeoutError) as exc:
+        except (
+            httpx.RemoteProtocolError,
+            httpx.ReadTimeout,
+            APIConnectionError,
+            APITimeoutError,
+        ) as exc:
             if isinstance(exc, httpx.RemoteProtocolError):
                 detail = "AI 服务连接被意外中断，请稍后重试"
             elif isinstance(exc, (httpx.ReadTimeout, APITimeoutError)):
@@ -175,7 +192,7 @@ class LLMService:
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"AI 响应因长度限制被截断（已生成 {len(full_response)} 字符），请缩短输入内容或调整模型参数"
+                detail=f"AI 响应因长度限制被截断（已生成 {len(full_response)} 字符），请缩短输入内容或调整模型参数",
             )
 
         if not full_response:
@@ -187,7 +204,7 @@ class LLMService:
             )
             raise HTTPException(
                 status_code=500,
-                detail=f"AI 未返回有效内容（结束原因: {finish_reason or '未知'}），请稍后重试或联系管理员"
+                detail=f"AI 未返回有效内容（结束原因: {finish_reason or '未知'}），请稍后重试或联系管理员",
             )
 
         await self.usage_service.increment("api_request_count")
@@ -199,7 +216,7 @@ class LLMService:
         )
         return full_response
 
-    async def _resolve_llm_config(self, user_id: Optional[int]) -> Dict[str, Optional[str]]:
+    async def _resolve_llm_config(self, user_id: int | None) -> dict[str, str | None]:
         if user_id:
             config = await self.llm_repo.get_by_user(user_id)
             if config and config.llm_provider_api_key:
@@ -218,10 +235,12 @@ class LLMService:
         model = await self._get_config_value("llm.model")
 
         if not api_key:
-            logger.error("未配置默认 LLM API Key，且用户 %s 未设置自定义 API Key", user_id)
+            logger.error(
+                "未配置默认 LLM API Key，且用户 %s 未设置自定义 API Key", user_id
+            )
             raise HTTPException(
                 status_code=500,
-                detail="未配置默认 LLM API Key，请联系管理员配置系统默认 API Key 或在个人设置中配置自定义 API Key"
+                detail="未配置默认 LLM API Key，请联系管理员配置系统默认 API Key 或在个人设置中配置自定义 API Key",
             )
 
         return {"api_key": api_key, "base_url": base_url, "model": model}
@@ -230,21 +249,27 @@ class LLMService:
         self,
         text: str,
         *,
-        user_id: Optional[int] = None,
-        model: Optional[str] = None,
-    ) -> List[float]:
-        """生成文本向量，用于章节 RAG 检索，支持 openai 与 ollama 双提供方。"""
+        user_id: int | None = None,
+        model: str | None = None,
+    ) -> list[float]:
+        """生成文本向量，用于章节 RAG 检索，支持 openai 与 ollama 双提供方。."""
         provider = settings.embedding_provider
         target_model = model or (
-            settings.ollama_embedding_model if provider == "ollama" else settings.embedding_model
+            settings.ollama_embedding_model
+            if provider == "ollama"
+            else settings.embedding_model
         )
 
         if provider == "ollama":
             if OllamaAsyncClient is None:
                 logger.error("未安装 ollama 依赖，无法调用本地嵌入模型。")
-                raise HTTPException(status_code=500, detail="缺少 Ollama 依赖，请先安装 ollama 包。")
+                raise HTTPException(
+                    status_code=500, detail="缺少 Ollama 依赖，请先安装 ollama 包。"
+                )
 
-            base_url_any = settings.ollama_embedding_base_url or settings.embedding_base_url
+            base_url_any = (
+                settings.ollama_embedding_base_url or settings.embedding_base_url
+            )
             base_url = str(base_url_any) if base_url_any else None
             client = OllamaAsyncClient(host=base_url)
             try:
@@ -258,7 +283,7 @@ class LLMService:
                     exc_info=True,
                 )
                 return []
-            embedding: Optional[List[float]]
+            embedding: list[float] | None
             if isinstance(response, dict):
                 embedding = response.get("embedding")
             else:
@@ -290,7 +315,11 @@ class LLMService:
                 )
                 return []
             if not response.data:
-                logger.warning("OpenAI 嵌入请求返回空数据: model=%s user_id=%s", target_model, user_id)
+                logger.warning(
+                    "OpenAI 嵌入请求返回空数据: model=%s user_id=%s",
+                    target_model,
+                    user_id,
+                )
                 return []
             embedding = response.data[0].embedding
 
@@ -304,10 +333,12 @@ class LLMService:
             self._embedding_dimensions[target_model] = dimension
         return embedding
 
-    def get_embedding_dimension(self, model: Optional[str] = None) -> Optional[int]:
-        """获取嵌入向量维度，优先返回缓存结果，其次读取配置。"""
+    def get_embedding_dimension(self, model: str | None = None) -> int | None:
+        """获取嵌入向量维度，优先返回缓存结果，其次读取配置。."""
         target_model = model or (
-            settings.ollama_embedding_model if settings.embedding_provider == "ollama" else settings.embedding_model
+            settings.ollama_embedding_model
+            if settings.embedding_provider == "ollama"
+            else settings.embedding_model
         )
         if target_model in self._embedding_dimensions:
             return self._embedding_dimensions[target_model]
@@ -325,7 +356,7 @@ class LLMService:
         await self.user_repo.increment_daily_request(user_id)
         await self.session.commit()
 
-    async def _get_config_value(self, key: str) -> Optional[str]:
+    async def _get_config_value(self, key: str) -> str | None:
         record = await self.system_config_repo.get_by_key(key)
         if record:
             return record.value

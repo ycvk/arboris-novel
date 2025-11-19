@@ -1,5 +1,3 @@
-from typing import Optional
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import AdminSetting
@@ -7,13 +5,13 @@ from ..repositories.admin_setting_repository import AdminSettingRepository
 
 
 class AdminSettingService:
-    """管理员配置项服务，提供简单的 KV 操作。"""
+    """管理员配置项服务，提供简单的 KV 操作。."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repo = AdminSettingRepository(session)
 
-    async def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
+    async def get(self, key: str, default: str | None = None) -> str | None:
         value = await self.repo.get_value(key)
         return value if value is not None else default
 

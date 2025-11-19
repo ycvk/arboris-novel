@@ -1,5 +1,3 @@
-from typing import Optional
-
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,13 +8,15 @@ from ..schemas.user import UserCreate, UserInDB
 
 
 class UserService:
-    """用户领域服务，负责注册、查询与配额统计。"""
+    """用户领域服务，负责注册、查询与配额统计。."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
         self.repo = UserRepository(session)
 
-    async def create_user(self, payload: UserCreate, *, external_id: str | None = None) -> UserInDB:
+    async def create_user(
+        self, payload: UserCreate, *, external_id: str | None = None
+    ) -> UserInDB:
         hashed_password = hash_password(payload.password)
         user = User(
             username=payload.username,
@@ -34,19 +34,19 @@ class UserService:
 
         return UserInDB.model_validate(user)
 
-    async def get_by_username(self, username: str) -> Optional[UserInDB]:
+    async def get_by_username(self, username: str) -> UserInDB | None:
         user = await self.repo.get_by_username(username)
         return UserInDB.model_validate(user) if user else None
 
-    async def get_by_email(self, email: str) -> Optional[UserInDB]:
+    async def get_by_email(self, email: str) -> UserInDB | None:
         user = await self.repo.get_by_email(email)
         return UserInDB.model_validate(user) if user else None
 
-    async def get_by_external_id(self, external_id: str) -> Optional[UserInDB]:
+    async def get_by_external_id(self, external_id: str) -> UserInDB | None:
         user = await self.repo.get_by_external_id(external_id)
         return UserInDB.model_validate(user) if user else None
 
-    async def get_user(self, user_id: int) -> Optional[UserInDB]:
+    async def get_user(self, user_id: int) -> UserInDB | None:
         user = await self.repo.get(id=user_id)
         return UserInDB.model_validate(user) if user else None
 

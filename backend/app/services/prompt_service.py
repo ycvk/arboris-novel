@@ -1,5 +1,4 @@
 import asyncio
-from typing import Dict, Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -7,13 +6,13 @@ from ..models import Prompt
 from ..repositories.prompt_repository import PromptRepository
 from ..schemas.prompt import PromptCreate, PromptRead, PromptUpdate
 
-_CACHE: Dict[str, PromptRead] = {}
+_CACHE: dict[str, PromptRead] = {}
 _LOCK = asyncio.Lock()
 _LOADED = False
 
 
 class PromptService:
-    """提示词服务，提供缓存加速与 CRUD 能力。"""
+    """提示词服务，提供缓存加速与 CRUD 能力。."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -26,12 +25,14 @@ class PromptService:
             _CACHE = {item.name: PromptRead.model_validate(item) for item in prompts}
             _LOADED = True
 
-    async def get_prompt(self, name: str) -> Optional[str]:
+    async def get_prompt(self, name: str) -> str | None:
         global _LOADED
         async with _LOCK:
             if not _LOADED:
                 prompts = await self.repo.list_all()
-                _CACHE.update({item.name: PromptRead.model_validate(item) for item in prompts})
+                _CACHE.update(
+                    {item.name: PromptRead.model_validate(item) for item in prompts}
+                )
                 _LOADED = True
             cached = _CACHE.get(name)
         if cached:
@@ -50,7 +51,7 @@ class PromptService:
         prompts = await self.repo.list_all()
         return [PromptRead.model_validate(item) for item in prompts]
 
-    async def get_prompt_by_id(self, prompt_id: int) -> Optional[PromptRead]:
+    async def get_prompt_by_id(self, prompt_id: int) -> PromptRead | None:
         instance = await self.repo.get(id=prompt_id)
         if not instance:
             return None
@@ -71,7 +72,9 @@ class PromptService:
             _LOADED = True
         return prompt_read
 
-    async def update_prompt(self, prompt_id: int, payload: PromptUpdate) -> Optional[PromptRead]:
+    async def update_prompt(
+        self, prompt_id: int, payload: PromptUpdate
+    ) -> PromptRead | None:
         instance = await self.repo.get(id=prompt_id)
         if not instance:
             return None
