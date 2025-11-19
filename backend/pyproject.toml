@@ -1,0 +1,152 @@
+[project]
+name = "arboris-backend"
+version = "1.0.0"
+description = "AI 辅助小说创作平台后端"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Arboris Team"}
+]
+dependencies = [
+    "fastapi==0.110.0",
+    "uvicorn[standard]==0.29.0",
+    "sqlalchemy==2.0.44",
+    "greenlet>=3.0.0",
+    "asyncmy==0.2.9",
+    "aiosqlite==0.21.0",
+    "alembic==1.13.1",
+    "passlib[bcrypt]==1.7.4",
+    "bcrypt>=3.2.0,<4.0.0",
+    "python-jose==3.3.0",
+    "python-dotenv==1.0.1",
+    "pydantic==2.12.2",
+    "pydantic-settings==2.11.0",
+    "python-multipart==0.0.9",
+    "openai==2.3.0",
+    "httpx==0.28.1",
+    "email-validator==2.1.1",
+    "cryptography>=41.0.0",
+    "libsql-client==0.3.1",
+    "qdrant-client==1.8.2",
+    "ollama==0.6.0",
+    "langchain-text-splitters==0.3.11",
+    "tenacity==9.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "black>=24.0.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+docs = [
+    "mkdocs>=1.6.0",
+    "mkdocs-material>=9.0.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "N",  # pep8-naming
+    "D",  # pydocstyle
+    "UP", # pyupgrade
+]
+ignore = [
+    "D100", # Missing docstring in public module
+    "D104", # Missing docstring in public package
+    "D107", # Missing docstring in __init__
+    "E501", # Line too long (handled by black)
+    "D102", # Missing docstring in public method (样板代码)
+    "D101", # Missing docstring in public class (样板代码)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/**/*.py" = ["D", "S101"]
+"app/api/routers/*.py" = ["D103", "D102"]  # 忽略路由文件中依赖注入函数的文档字符串
+"app/core/dependencies.py" = ["D103", "D102"]  # 依赖注入函数
+"db/migrations/*.py" = ["D", "D400", "D415"]  # 迁移脚本
+"scripts/*.py" = ["D", "D400", "D415"]  # 工具脚本
+"app/services/*.py" = ["E402"]  # 忽略 services 中 from __future__ 的 E402 问题
+"app/models/*.py" = ["F821"]  # 忽略模型中的循环导入延迟引用
+"app/main.py" = ["D400", "D415"]  # 忽略应用生命周期函数的文档格式
+"app/db/base.py" = ["D105"]  # 忽略 magic 方法的文档要求
+
+[tool.black]
+target-version = ['py311']
+line-length = 88
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "asyncmy.*",
+    "aiosqlite.*",
+    "qdrant_client.*",
+    "libsql_client.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+addopts = [
+    "--cov=app",
+    "--cov-report=html",
+    "--cov-report=term-missing",
+    "--verbose",
+    "-v",
+]
+markers = [
+    "unit: 单元测试",
+    "integration: 集成测试",
+    "slow: 慢速测试",
+    "asyncio: 异步测试",
+]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
