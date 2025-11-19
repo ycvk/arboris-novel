@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -15,19 +14,23 @@ class DailyRequestLimit(BaseModel):
 
 
 class UpdateLogRead(BaseModel):
+    """更新日志读取模型."""
+
     id: int
     content: str
     created_at: datetime
-    created_by: Optional[str] = None
+    created_by: str | None = None
     is_pinned: bool
 
     class Config:
+        """Pydantic 模型配置."""
+
         from_attributes = True
 
 
 class UpdateLogBase(BaseModel):
-    content: Optional[str] = None
-    is_pinned: Optional[bool] = None
+    content: str | None = None
+    is_pinned: bool | None = None
 
 
 class UpdateLogCreate(UpdateLogBase):
@@ -51,7 +54,7 @@ class AdminNovelSummary(BaseModel):
 
 class RAGProjectStat(BaseModel):
     project_id: str
-    title: Optional[str] = None
+    title: str | None = None
     chunks: int = 0
     summaries: int = 0
 
@@ -59,10 +62,10 @@ class RAGProjectStat(BaseModel):
 class RAGStatus(BaseModel):
     enabled: bool
     provider: str
-    url: Optional[str] = None
-    collection_prefix: Optional[str] = None
-    embedding_model: Optional[str] = None
-    embedding_dim: Optional[int] = None
+    url: str | None = None
+    collection_prefix: str | None = None
+    embedding_model: str | None = None
+    embedding_dim: int | None = None
     top_k_chunks: int
     top_k_summaries: int
     chunk_size: int
@@ -71,6 +74,6 @@ class RAGStatus(BaseModel):
     total_summaries: int
     top_projects: list[RAGProjectStat] = []
     # 近 7 天运行指标
-    avg_latency_ms_7d: Optional[float] = None
-    empty_recall_rate_7d: Optional[float] = None
-    duplicate_chunk_rate_7d: Optional[float] = None
+    avg_latency_ms_7d: float | None = None
+    empty_recall_rate_7d: float | None = None
+    duplicate_chunk_rate_7d: float | None = None

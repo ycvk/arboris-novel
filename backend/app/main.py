@@ -1,18 +1,16 @@
-"""FastAPI 应用入口，负责装配路由、依赖与生命周期管理。"""
+"""FastAPI 应用入口，负责装配路由、依赖与生命周期管理。."""
 
-import logging
-from logging.config import dictConfig
 from contextlib import asynccontextmanager
+from logging.config import dictConfig
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .api.routers import api_router
 from .core.config import settings
 from .db.init_db import init_db
-from .services.prompt_service import PromptService
 from .db.session import AsyncSessionLocal
-from .api.routers import api_router
-
+from .services.prompt_service import PromptService
 
 dictConfig(
     {
@@ -66,12 +64,20 @@ dictConfig(
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """应用生命周期管理。
+
+    负责应用的启动和关闭时的资源初始化与清理。
+    """
     # 应用启动时初始化数据库，并预热提示词缓存
     await init_db()
     async with AsyncSessionLocal() as session:
         prompt_service = PromptService(session)
         await prompt_service.preload()
+
     yield
+
+    # 应用关闭时的清理工作
+    # TODO: 添加必要的清理逻辑
 
 
 app = FastAPI(
@@ -97,7 +103,7 @@ app.include_router(api_router)
 @app.get("/health", tags=["Health"])
 @app.get("/api/health", tags=["Health"])
 async def health_check():
-    """健康检查接口，返回应用状态。"""
+    """健康检查接口，返回应用状态。."""
     return {
         "status": "healthy",
         "app": settings.app_name,
