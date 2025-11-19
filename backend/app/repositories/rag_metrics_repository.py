@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import Optional
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.rag_metrics import RAGRetrievalLog
@@ -22,7 +21,7 @@ class RAGMetricsRepository:
         summary_count: int,
         duplicate_ratio: float,
         provider: str,
-        occurred_at: Optional[datetime] = None,
+        occurred_at: datetime | None = None,
     ) -> None:
         record = RAGRetrievalLog(
             project_id=project_id,
@@ -40,14 +39,29 @@ class RAGMetricsRepository:
         since = datetime.utcnow() - timedelta(days=days)
 
         # 平均延迟
-        stmt_avg = select(func.avg(RAGRetrievalLog.latency_ms)).where(RAGRetrievalLog.occurred_at >= since)
+        stmt_avg = select(func.avg(RAGRetrievalLog.latency_ms)).where(
+            RAGRetrievalLog.occurred_at >= since
+        )
         # 空召回率：chunks+summaries==0 的占比
         stmt_cnt = select(
             func.count(RAGRetrievalLog.id),
-            func.sum(func.case(((RAGRetrievalLog.chunk_count + RAGRetrievalLog.summary_count == 0, 1),), else_=0)),
+            func.sum(
+                func.case(
+                    (
+                        (
+                            RAGRetrievalLog.chunk_count + RAGRetrievalLog.summary_count
+                            == 0,
+                            1,
+                        ),
+                    ),
+                    else_=0,
+                )
+            ),
         ).where(RAGRetrievalLog.occurred_at >= since)
         # 重复片段率：duplicate_ratio 的平均
-        stmt_dup = select(func.avg(RAGRetrievalLog.duplicate_ratio)).where(RAGRetrievalLog.occurred_at >= since)
+        stmt_dup = select(func.avg(RAGRetrievalLog.duplicate_ratio)).where(
+            RAGRetrievalLog.occurred_at >= since
+        )
 
         total_count = 0
         empty_count = 0
@@ -74,4 +88,3 @@ class RAGMetricsRepository:
             "duplicate_rate": float(avg_dup) if avg_dup is not None else None,
             "total": total_count,
         }
-

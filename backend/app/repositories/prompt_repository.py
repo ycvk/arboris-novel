@@ -1,16 +1,15 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from .base import BaseRepository
 from ..models import Prompt
+from .base import BaseRepository
 
 
 class PromptRepository(BaseRepository[Prompt]):
     model = Prompt
 
-    async def get_by_name(self, name: str) -> Optional[Prompt]:
+    async def get_by_name(self, name: str) -> Prompt | None:
         result = await self.session.execute(select(Prompt).where(Prompt.name == name))
         return result.scalars().first()
 

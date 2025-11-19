@@ -1,26 +1,28 @@
-from typing import Any, Generic, Iterable, Optional, TypeVar
+from collections.abc import Iterable
+from typing import Any, Generic, TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import InstrumentedAttribute
 
 ModelType = TypeVar("ModelType")
 
 
 class BaseRepository(Generic[ModelType]):
-    """通用仓储基类，封装常见的增删改查操作。"""
+    """通用仓储基类，封装常见的增删改查操作。."""
 
     model: type[ModelType]
 
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get(self, **filters: Any) -> Optional[ModelType]:
+    async def get(self, **filters: Any) -> ModelType | None:
         stmt = select(self.model).filter_by(**filters)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def list(self, *, filters: Optional[dict[str, Any]] = None) -> Iterable[ModelType]:
+    async def list(
+        self, *, filters: dict[str, Any] | None = None
+    ) -> Iterable[ModelType]:
         stmt = select(self.model)
         if filters:
             stmt = stmt.filter_by(**filters)

@@ -1,27 +1,26 @@
+from collections.abc import Iterable
 from datetime import date
-from typing import Iterable, Optional
 
-from sqlalchemy import func, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
-from .base import BaseRepository
 from ..models import User, UserDailyRequest
+from .base import BaseRepository
 
 
 class UserRepository(BaseRepository[User]):
     model = User
 
-    async def get_by_username(self, username: str) -> Optional[User]:
+    async def get_by_username(self, username: str) -> User | None:
         stmt = select(User).where(User.username == username)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def get_by_email(self, email: str) -> Optional[User]:
+    async def get_by_email(self, email: str) -> User | None:
         stmt = select(User).where(User.email == email)
         result = await self.session.execute(stmt)
         return result.scalars().first()
 
-    async def get_by_external_id(self, external_id: str) -> Optional[User]:
+    async def get_by_external_id(self, external_id: str) -> User | None:
         stmt = select(User).where(User.external_id == external_id)
         result = await self.session.execute(stmt)
         return result.scalars().first()
@@ -40,7 +39,9 @@ class UserRepository(BaseRepository[User]):
         record = result.scalars().first()
 
         if record is None:
-            record = UserDailyRequest(user_id=user_id, request_date=today, request_count=1)
+            record = UserDailyRequest(
+                user_id=user_id, request_date=today, request_count=1
+            )
             self.session.add(record)
         else:
             record.request_count += 1

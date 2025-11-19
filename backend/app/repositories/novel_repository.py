@@ -1,16 +1,16 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from .base import BaseRepository
 from ..models import Chapter, NovelProject
+from .base import BaseRepository
 
 
 class NovelRepository(BaseRepository[NovelProject]):
     model = NovelProject
 
-    async def get_by_id(self, project_id: str) -> Optional[NovelProject]:
+    async def get_by_id(self, project_id: str) -> NovelProject | None:
         stmt = (
             select(NovelProject)
             .where(NovelProject.id == project_id)
@@ -18,11 +18,19 @@ class NovelRepository(BaseRepository[NovelProject]):
                 selectinload(NovelProject.blueprint),
                 selectinload(NovelProject.characters),
                 selectinload(NovelProject.relationships_),
-                selectinload(NovelProject.outlines),
                 selectinload(NovelProject.conversations),
                 selectinload(NovelProject.chapters).selectinload(Chapter.versions),
                 selectinload(NovelProject.chapters).selectinload(Chapter.evaluations),
-                selectinload(NovelProject.chapters).selectinload(Chapter.selected_version),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.selected_version
+                ),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.event
+                ),  # 预加载事件关系
+                # 预加载三层蓝图架构的关联对象，避免 lazy loading 触发 MissingGreenlet 错误
+                selectinload(NovelProject.story_framework),
+                selectinload(NovelProject.volume_outlines),
+                selectinload(NovelProject.plot_events),  # 预加载情节事件（第三层蓝图）
             )
         )
         result = await self.session.execute(stmt)
@@ -35,8 +43,16 @@ class NovelRepository(BaseRepository[NovelProject]):
             .order_by(NovelProject.updated_at.desc())
             .options(
                 selectinload(NovelProject.blueprint),
-                selectinload(NovelProject.outlines),
-                selectinload(NovelProject.chapters).selectinload(Chapter.selected_version),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.selected_version
+                ),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.event
+                ),  # 预加载事件关系
+                # 预加载三层蓝图架构的关联对象
+                selectinload(NovelProject.story_framework),
+                selectinload(NovelProject.volume_outlines),
+                selectinload(NovelProject.plot_events),  # 预加载情节事件（第三层蓝图）
             )
         )
         return result.scalars().all()
@@ -48,8 +64,16 @@ class NovelRepository(BaseRepository[NovelProject]):
             .options(
                 selectinload(NovelProject.owner),
                 selectinload(NovelProject.blueprint),
-                selectinload(NovelProject.outlines),
-                selectinload(NovelProject.chapters).selectinload(Chapter.selected_version),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.selected_version
+                ),
+                selectinload(NovelProject.chapters).selectinload(
+                    Chapter.event
+                ),  # 预加载事件关系
+                # 预加载三层蓝图架构的关联对象
+                selectinload(NovelProject.story_framework),
+                selectinload(NovelProject.volume_outlines),
+                selectinload(NovelProject.plot_events),  # 预加载情节事件（第三层蓝图）
             )
         )
         return result.scalars().all()
